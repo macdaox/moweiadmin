@@ -1,0 +1,46 @@
+<view class="container">
+  <view class="card hero">
+    <text class="t">{{shopName}}</text>
+    <text class="muted">现代简约 · 轻奢质感 · 金华本地服务</text>
+  </view>
+
+  <view class="card block">
+    <text class="title">服务流程</text>
+    <view class="steps">
+      <view class="step">量尺</view>
+      <view class="arrow">→</view>
+      <view class="step">设计</view>
+      <view class="arrow">→</view>
+      <view class="step">生产</view>
+      <view class="arrow">→</view>
+      <view class="step">安装</view>
+      <view class="arrow">→</view>
+      <view class="step">售后</view>
+    </view>
+  </view>
+
+  <view class="card block">
+    <text class="title">工艺与标准</text>
+    <view class="ul">
+      <text>• 板材环保标准：E0/E1 级可选</text>
+      <text>• 结构工艺：封边、防潮、防霉细节到位</text>
+      <text>• 售后质保：安装后问题快速响应</text>
+    </view>
+  </view>
+
+  <view class="card block">
+    <text class="title">风格展示</text>
+    <view class="chips">
+      <view class="chip chip-active">现代简约</view>
+      <view class="chip">轻奢</view>
+      <view class="chip">极简</view>
+      <view class="chip">新中式</view>
+    </view>
+    <text class="muted tip">更多内容可在后续接入真实素材与图文模块</text>
+  </view>
+
+  <view class="actions">
+    <view class="btn btn-primary" bindtap="goContact">联系我们</view>
+  </view>
+</view>
+

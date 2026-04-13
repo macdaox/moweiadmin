@@ -1,0 +1,112 @@
+<view class="container">
+  <view class="search card">
+    <input
+      class="search-input"
+      value="{{searchText}}"
+      placeholder="{{searchPlaceholder}}"
+      bindinput="onSearchInput"
+      confirm-type="search"
+      bindconfirm="onSearchConfirm"
+    />
+    <text class="search-btn" bindtap="onSearchConfirm">搜索</text>
+  </view>
+
+  <view class="section">
+    <scroll-view class="cats" scroll-x="true" show-scrollbar="false">
+      <view class="cats-inner">
+        <view
+          wx:for="{{categories}}"
+          wx:key="id"
+          class="cat"
+          data-id="{{item.id}}"
+          bindtap="onTapCategory"
+        >
+          <view class="cat-icon">{{item.icon}}</view>
+          <text class="cat-name">{{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <view>
+        <text class="title">{{caseTitle}}</text>
+        <text class="muted sub">{{caseSubTitle}}</text>
+      </view>
+    </view>
+    <view class="case-grid">
+      <view
+        wx:for="{{scenes}}"
+        wx:key="id"
+        class="case-card card"
+        data-id="{{item.id}}"
+        bindtap="onTapScene"
+      >
+        <image class="case-img" mode="aspectFill" src="{{item.cover}}" />
+        <view class="case-foot">
+          <text class="case-tag">{{item.tag}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <view>
+        <text class="title">{{designTitle}}</text>
+        <text class="muted sub">{{designSubTitle}}</text>
+      </view>
+      <text class="more" bindtap="onTapDesignMore">更多</text>
+    </view>
+    <view class="card">
+      <swiper class="design" autoplay="true" circular="true" interval="3500">
+        <swiper-item wx:for="{{designImages}}" wx:key="*this">
+          <image class="design-img" mode="aspectFill" src="{{item}}" bindtap="onTapDesignMore" />
+        </swiper-item>
+      </swiper>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <text class="title">{{productsTitle}}</text>
+      <text class="more" bindtap="onTapAllProducts">全部</text>
+    </view>
+    <scroll-view class="products" scroll-x="true" show-scrollbar="false">
+      <view class="products-inner">
+        <view
+          wx:for="{{shownProducts}}"
+          wx:key="id"
+          class="p-card card"
+          data-id="{{item.id}}"
+          bindtap="onTapProduct"
+        >
+          <image class="p-img" mode="aspectFill" src="{{item.cover}}" />
+          <view class="p-info">
+            <text class="p-title">{{item.title}}</text>
+            <text class="p-price">¥{{item.price}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="float">
+    <view class="float-btn" bindtap="onTapPhone">
+      <text class="float-ico">☎</text>
+    </view>
+    <view class="float-btn" wx:if="{{showTop}}" bindtap="onTapTop">
+      <text class="float-ico">↑</text>
+    </view>
+    <view class="float-btn" bindtap="onTapCart">
+      <text class="float-ico">🛒</text>
+      <view class="badge" wx:if="{{cartCount>0}}">
+        <text class="badge-t">{{cartCount}}</text>
+      </view>
+    </view>
+    <button class="float-btn contact" open-type="contact">
+      <text class="float-ico">💬</text>
+    </button>
+  </view>
+</view>

@@ -1,0 +1,25 @@
+<view class="wrap">
+  <view wx:if="{{images.length>0}}">
+    <swiper class="swiper" circular="true" current="{{current}}" bindchange="onChange">
+      <swiper-item wx:for="{{images}}" wx:key="*this">
+        <image class="img" mode="aspectFill" src="{{item}}" bindtap="preview" data-src="{{item}}" />
+      </swiper-item>
+    </swiper>
+
+    <view class="hud">
+      <view class="hud-left">
+        <text class="name">{{title}}</text>
+        <text class="muted">{{current + 1}} / {{images.length}}</text>
+      </view>
+      <view class="hud-btn" bindtap="toggleFav">
+        <text class="hud-fav">{{isFav ? '已收藏' : '收藏'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty">
+    <text class="empty-title">图片加载失败</text>
+    <text class="empty-sub">{{loadError || '请返回重试'}}</text>
+    <view class="btn btn-ghost" bindtap="goBack">返回上一页</view>
+  </view>
+</view>

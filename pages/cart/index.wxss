@@ -1,0 +1,109 @@
+.empty {
+  padding-top: 220rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.go {
+  width: 320rpx;
+}
+
+.list {
+  padding: 10rpx 0;
+}
+
+.row {
+  display: flex;
+  gap: 16rpx;
+  padding: 18rpx 18rpx;
+}
+
+.img {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 14rpx;
+}
+
+.mid {
+  flex: 1;
+}
+
+.name {
+  font-size: 28rpx;
+  font-weight: 700;
+  display: block;
+}
+
+.sku {
+  display: block;
+  margin-top: 8rpx;
+}
+
+.price {
+  display: block;
+  margin-top: 10rpx;
+  color: #c7a46a;
+  font-weight: 800;
+}
+
+.right {
+  width: 190rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12rpx;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.step-btn {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 14rpx;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+}
+
+.step-num {
+  width: 58rpx;
+  text-align: center;
+}
+
+.del {
+  color: #ef4444;
+  font-size: 24rpx;
+}
+
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 120rpx;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 2rpx solid #f3f4f6;
+  padding: 14rpx 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.total {
+  margin-left: 10rpx;
+  color: #c7a46a;
+  font-size: 36rpx;
+  font-weight: 900;
+}
+
+.pay {
+  width: 280rpx;
+}
+

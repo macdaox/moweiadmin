@@ -1,0 +1,63 @@
+.hero {
+  padding: 22rpx 18rpx;
+}
+
+.t {
+  font-size: 36rpx;
+  font-weight: 800;
+  display: block;
+}
+
+.block {
+  margin-top: 16rpx;
+  padding: 18rpx 18rpx 22rpx;
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+
+.step {
+  padding: 10rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(199, 164, 106, 0.1);
+  color: #c7a46a;
+  font-weight: 700;
+  font-size: 24rpx;
+}
+
+.arrow {
+  color: #9ca3af;
+}
+
+.ul {
+  margin-top: 14rpx;
+}
+
+.ul text {
+  display: block;
+  margin-top: 10rpx;
+  color: #374151;
+}
+
+.chips {
+  margin-top: 14rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.tip {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+}
+
+.actions {
+  margin-top: 18rpx;
+}
+

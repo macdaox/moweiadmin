@@ -1,0 +1,68 @@
+<view class="container">
+  <view class="card head">
+    <text class="shop">{{shopName}}</text>
+    <text class="muted">金华本地区域服务 · 全屋定制/家居整装</text>
+    <view class="u" wx:if="{{userInfo}}">
+      <image class="u-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill" />
+      <text class="u-name">{{userInfo.nickName}}</text>
+    </view>
+  </view>
+
+  <view class="card block" wx:if="{{!unlocked}}">
+    <text class="muted">为了防止联系方式被滥用，需要授权获取你的微信昵称头像后查看。</text>
+    <view class="gate">
+      <view class="btn btn-primary" bindtap="requestUnlock">授权查看联系方式</view>
+    </view>
+  </view>
+
+  <view class="card block">
+    <view class="row">
+      <text class="label muted">地址</text>
+      <text class="val">{{unlocked ? address : '授权后可见'}}</text>
+    </view>
+    <view class="row">
+      <text class="label muted">电话</text>
+      <text class="val">{{unlocked ? phoneNumber : '授权后可见'}}</text>
+    </view>
+    <view class="row">
+      <text class="label muted">微信</text>
+      <text class="val">{{unlocked ? wechatId : '授权后可见'}}</text>
+    </view>
+    <view class="row">
+      <text class="label muted">营业</text>
+      <text class="val">09:00-18:00</text>
+    </view>
+  </view>
+
+  <view class="actions">
+    <view class="btn btn-primary" bindtap="call">一键拨号</view>
+    <view class="btn btn-ghost" bindtap="openMap">导航到店</view>
+    <view class="btn btn-ghost" bindtap="copyWechat">复制微信号</view>
+    <button class="btn btn-ghost" open-type="contact">在线咨询</button>
+  </view>
+
+  <view wx:if="{{showAuthSheet}}" class="mask" catchtap="noop">
+    <view class="sheet" catchtap="noop">
+      <text class="sheet-title">{{shopName}} 申请使用</text>
+      <text class="sheet-desc">获取你的昵称、头像，用于收集来信方式并防止骚扰。</text>
+
+      <view class="field">
+        <text class="f-label muted">头像</text>
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <image wx:if="{{tempAvatarUrl}}" class="avatar-img" src="{{tempAvatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-ph" />
+        </button>
+      </view>
+
+      <view class="field">
+        <text class="f-label muted">昵称</text>
+        <input class="nick-input" value="{{tempNickName}}" placeholder="请输入昵称" bindinput="onNicknameInput" />
+      </view>
+
+      <view class="sheet-actions">
+        <view class="sheet-btn ghost" bindtap="rejectAuth">拒绝</view>
+        <view class="sheet-btn primary" bindtap="allowAuth">允许</view>
+      </view>
+    </view>
+  </view>
+</view>

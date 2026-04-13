@@ -1,0 +1,36 @@
+<view class="container">
+  <view class="search card">
+    <input
+      class="search-input"
+      value="{{keyword}}"
+      placeholder="搜索商品"
+      bindinput="onKeywordInput"
+      confirm-type="search"
+      bindconfirm="applyFilter"
+    />
+    <text class="search-btn" bindtap="applyFilter">搜索</text>
+  </view>
+
+  <view class="meta" wx:if="{{categoryName}}">
+    <text class="muted">当前分类：</text>
+    <text class="accent">{{categoryName}}</text>
+    <text class="clear" bindtap="clearCategory">清除</text>
+  </view>
+
+  <view class="grid">
+    <view
+      wx:for="{{list}}"
+      wx:key="id"
+      class="item card"
+      data-id="{{item.id}}"
+      bindtap="goDetail"
+    >
+      <image class="img" mode="aspectFill" src="{{item.cover}}" />
+      <view class="info">
+        <text class="name">{{item.title}}</text>
+        <text class="price">¥{{item.price}}</text>
+      </view>
+    </view>
+  </view>
+</view>
+
