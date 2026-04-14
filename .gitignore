@@ -5,6 +5,17 @@
 # WeChat DevTools
 project.private.config.json
 
+# Mini Program (keep locally, do not push to backend repo)
+app.js
+app.json
+app.wxss
+sitemap.json
+project.config.json
+project.private.config.json
+custom-tab-bar/
+pages/
+utils/
+
 # Docs / IDE
 .trae/
 文档/
@@ -20,4 +31,3 @@ admin-web/dist/
 admin-web/dist-ssr/
 admin-web/.env
 admin-web/.env.*
-
