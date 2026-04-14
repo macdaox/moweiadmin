@@ -224,11 +224,16 @@ async function main() {
   ensureAuthConfigured()
   await initStore()
   const port = Number(process.env.PORT) || 3000
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     process.stdout.write(`server listening on http://localhost:${port}\n`)
+  })
+  server.on('error', (e) => {
+    process.stderr.write(`listen error: ${e && e.message ? e.message : String(e)}\n`)
+    process.exit(1)
   })
 }
 
-main().catch(() => {
+main().catch((e) => {
+  process.stderr.write(`${e && e.stack ? e.stack : String(e)}\n`)
   process.exit(1)
 })

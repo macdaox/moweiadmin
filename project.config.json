@@ -2,10 +2,10 @@
   "description": "家居装修全屋定制小程序",
   "packOptions": {
     "ignore": [
-      "server/**/*",
-      "admin-web/**/*",
-      ".trae/**/*",
-      "文档/**/*"
+      { "type": "folder", "value": "server" },
+      { "type": "folder", "value": "admin-web" },
+      { "type": "folder", "value": ".trae" },
+      { "type": "folder", "value": "文档" }
     ],
     "include": []
   },
