@@ -1,5 +1,7 @@
 require('dotenv').config()
 
+const path = require('path')
+const fs = require('fs')
 const express = require('express')
 const cors = require('cors')
 const {
@@ -23,38 +25,27 @@ const app = express()
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
 
-app.get('/', async (req, res) => {
-  const accept = String(req.headers.accept || '')
-  if (accept.includes('text/html')) {
-    res.setHeader('content-type', 'text/html; charset=utf-8')
-    res.end(
-      [
-        '<!doctype html>',
-        '<html lang="zh-CN">',
-        '<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>API 服务已启动</title></head>',
-        '<body style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial; padding: 20px;">',
-        '<h2>后台 API 服务已启动</h2>',
-        '<ul>',
-        '<li>健康检查：<a href="/health">/health</a></li>',
-        '<li>小程序读取设置：<a href="/api/public/settings">/api/public/settings</a></li>',
-        '<li>小程序读取分类：<a href="/api/public/categories">/api/public/categories</a></li>',
-        '</ul>',
-        '</body></html>'
-      ].join('')
-    )
-    return
-  }
+const adminPublicDir = path.join(__dirname, '../public')
+const adminIndexFile = path.join(adminPublicDir, 'index.html')
 
-  res.json({
-    ok: true,
-    service: 'mowei-backend',
-    endpoints: ['/health', '/api/public/settings', '/api/public/categories', '/api/admin/login']
-  })
-})
+function hasAdminStatic() {
+  try {
+    return fs.existsSync(adminIndexFile)
+  } catch (_e) {
+    return false
+  }
+}
 
 app.get('/health', async (_req, res) => {
   res.json({ ok: true })
 })
+
+if (hasAdminStatic()) {
+  app.use(express.static(adminPublicDir))
+  app.get('/', async (_req, res) => {
+    res.sendFile(adminIndexFile)
+  })
+}
 
 app.get('/api/public/settings', async (_req, res) => {
   try {
@@ -259,6 +250,25 @@ async function main() {
   server.on('error', (e) => {
     process.stderr.write(`listen error: ${e && e.message ? e.message : String(e)}\n`)
     process.exit(1)
+  })
+}
+
+if (hasAdminStatic()) {
+  app.get('*', async (req, res) => {
+    const p = String(req.path || '')
+    if (p.startsWith('/api/') || p === '/health') {
+      res.status(404).json({ ok: false, message: 'not found' })
+      return
+    }
+    res.sendFile(adminIndexFile)
+  })
+} else {
+  app.get('/', async (_req, res) => {
+    res.json({
+      ok: true,
+      service: 'mowei-backend',
+      endpoints: ['/health', '/api/public/settings', '/api/public/categories', '/api/admin/login']
+    })
   })
 }
 

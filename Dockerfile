@@ -1,4 +1,19 @@
-FROM node:18-alpine
+FROM node:18-alpine AS build-admin
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY admin-web/package.json admin-web/pnpm-lock.yaml ./admin-web/
+
+RUN cd admin-web && pnpm install --frozen-lockfile
+
+COPY admin-web ./admin-web
+
+RUN cd admin-web && pnpm build
+
+
+FROM node:18-alpine AS runtime
 
 WORKDIR /app
 
@@ -8,6 +23,9 @@ RUN cd server && npm ci --omit=dev
 
 COPY server ./server
 
+RUN mkdir -p /app/server/public
+COPY --from=build-admin /app/admin-web/dist /app/server/public
+
 ENV NODE_ENV=production
 ENV PORT=80
 
@@ -16,4 +34,3 @@ WORKDIR /app/server
 EXPOSE 80
 
 CMD ["node", "src/index.js"]
-
