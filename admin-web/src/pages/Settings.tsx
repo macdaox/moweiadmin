@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/store/auth'
 import Modal from '@/components/Modal'
-import { createCategory, deleteCategory, getSettings, listCategories, updateCategory, updateSettings } from '@/api/admin'
+import { createCategory, deleteCategory, getSettings, listCategories, updateCategory, updateSettings, uploadImage } from '@/api/admin'
 import type { AppSettings, Category } from '@/api/types'
 
 type Tab = 'categories' | 'app'
@@ -42,7 +42,9 @@ export default function Settings() {
   const [q, setQ] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [bannersText, setBannersText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [open, setOpen] = useState(false)
 
@@ -78,6 +80,50 @@ export default function Settings() {
   useEffect(() => {
     refreshSettings()
   }, [token])
+
+  useEffect(() => {
+    const list = settings && Array.isArray(settings.homeBanners) ? settings.homeBanners : []
+    const text = list.map((b) => `${String(b.imageUrl || '').trim()}${b.path ? `|${String(b.path || '').trim()}` : ''}`).join('\n')
+    setBannersText(text)
+  }, [settings?.id, settings?.updatedAt])
+
+  function parseBanners(text: string) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split('|')
+        const imageUrl = String(parts[0] || '').trim()
+        const path = String(parts[1] || '').trim()
+        return { imageUrl, path }
+      })
+      .filter((b) => !!b.imageUrl)
+  }
+
+  async function uploadBanners(files: FileList | null) {
+    if (!token) return
+    if (!files || !files.length) return
+    setUploading(true)
+    try {
+      const urls: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        const f = files.item(i)
+        if (!f) continue
+        const r = await uploadImage(token, f)
+        urls.push(r.url)
+      }
+      if (urls.length) {
+        setBannersText((t) => {
+          const curr = String(t || '').trim()
+          const add = urls.join('\n')
+          return curr ? `${curr}\n${add}` : add
+        })
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -145,6 +191,7 @@ export default function Settings() {
         address: settings.address,
         latitude: settings.latitude,
         longitude: settings.longitude,
+        homeBanners: parseBanners(bannersText),
         homeNavTitle: settings.homeNavTitle,
         homeSearchPlaceholder: settings.homeSearchPlaceholder,
         homeCaseTitle: settings.homeCaseTitle,
@@ -258,6 +305,28 @@ export default function Settings() {
         </div>
       ) : (
         <div className="mt-5 grid gap-4">
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
+            <div className="text-sm font-semibold text-zinc-900">首页轮播图</div>
+            <div className="mt-3 grid gap-4">
+              <div>
+                <div className="text-xs font-medium text-zinc-700">上传图片</div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={saving || uploading}
+                  className="mt-2 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:text-white hover:file:bg-zinc-800 disabled:opacity-60"
+                  onChange={(e) => {
+                    uploadBanners(e.target.files)
+                    e.currentTarget.value = ''
+                  }}
+                />
+              </div>
+              <Field label="轮播图列表（每行一条：图片URL|跳转路径，可不填路径）">
+                <textarea className={inputCls} style={{ height: 140 }} value={bannersText} onChange={(e) => setBannersText(e.target.value)} />
+              </Field>
+            </div>
+          </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-sm font-semibold text-zinc-900">门店信息</div>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -382,7 +451,7 @@ export default function Settings() {
               type="button"
               className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm text-white hover:bg-zinc-800 disabled:opacity-50"
               onClick={submitSettings}
-              disabled={!settings || saving}
+              disabled={!settings || saving || uploading}
             >
               {saving ? '保存中...' : '保存设置'}
             </button>

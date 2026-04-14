@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/store/auth'
-import type { CaseItem, ContentType, PostItem, Product, StoreCard } from '@/api/types'
+import type { CaseItem, ContentType, DesignItem, PostItem, Product, StoreCard } from '@/api/types'
 import { createContent, deleteContent, listContent, updateContent } from '@/api/admin'
 import { Plus, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -9,7 +9,7 @@ import ContentTable from '@/pages/content/ContentTable'
 import ContentEditorModal from '@/pages/content/ContentEditorModal'
 import { contentLabel } from '@/pages/content/contentUtils'
 
-type AnyItem = Product | CaseItem | PostItem | StoreCard
+type AnyItem = Product | CaseItem | DesignItem | PostItem | StoreCard
 
 export default function Content() {
   const token = useAuth((s) => s.token)

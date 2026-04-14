@@ -9,6 +9,7 @@ import type {
   Paged,
   Product,
   CaseItem,
+  DesignItem,
   PostItem,
   StoreCard,
   Lead,
@@ -30,7 +31,7 @@ export function adminStats(token: string) {
 
 export function listContent(token: string, type: ContentType, q: string, limit = 50, offset = 0) {
   const entity = type === 'storeCards' ? 'store-cards' : type
-  return requestJson<Paged<Product | CaseItem | PostItem | StoreCard>>(`/api/admin/${entity}`, {
+  return requestJson<Paged<Product | CaseItem | DesignItem | PostItem | StoreCard>>(`/api/admin/${entity}`, {
     token,
     query: { q, limit, offset }
   })
@@ -38,7 +39,7 @@ export function listContent(token: string, type: ContentType, q: string, limit =
 
 export function createContent(token: string, type: ContentType, payload: unknown) {
   const entity = type === 'storeCards' ? 'store-cards' : type
-  return requestJson<Product | CaseItem | PostItem | StoreCard>(`/api/admin/${entity}`, {
+  return requestJson<Product | CaseItem | DesignItem | PostItem | StoreCard>(`/api/admin/${entity}`, {
     token,
     method: 'POST',
     body: payload
@@ -47,7 +48,7 @@ export function createContent(token: string, type: ContentType, payload: unknown
 
 export function updateContent(token: string, type: ContentType, id: string, payload: unknown) {
   const entity = type === 'storeCards' ? 'store-cards' : type
-  return requestJson<Product | CaseItem | PostItem | StoreCard>(`/api/admin/${entity}/${id}`, {
+  return requestJson<Product | CaseItem | DesignItem | PostItem | StoreCard>(`/api/admin/${entity}/${id}`, {
     token,
     method: 'PUT',
     body: payload

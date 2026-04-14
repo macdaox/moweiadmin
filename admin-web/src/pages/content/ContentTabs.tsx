@@ -21,9 +21,9 @@ export default function ContentTabs({ type, onChange }: { type: ContentType; onC
     <div className="mt-5 flex flex-wrap gap-2">
       <Tab active={type === 'products'} label="商品" onClick={() => onChange('products')} />
       <Tab active={type === 'cases'} label="案例" onClick={() => onChange('cases')} />
+      <Tab active={type === 'designs'} label="效果图" onClick={() => onChange('designs')} />
       <Tab active={type === 'posts'} label="动态" onClick={() => onChange('posts')} />
       <Tab active={type === 'storeCards'} label="门店名片" onClick={() => onChange('storeCards')} />
     </div>
   )
 }
-

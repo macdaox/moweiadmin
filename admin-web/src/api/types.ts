@@ -48,6 +48,7 @@ export type AppSettings = {
   address: string
   latitude: number | null
   longitude: number | null
+  homeBanners: { imageUrl: string; path: string }[]
   homeNavTitle: string
   homeSearchPlaceholder: string
   homeCaseTitle: string
@@ -94,6 +95,16 @@ export type PostItem = {
   updatedAt: string
 }
 
+export type DesignItem = {
+  id: string
+  title: string
+  status: 'enabled' | 'disabled'
+  coverUrl: string
+  images: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export type StoreCard = {
   id: string
   storeName: string
@@ -119,7 +130,7 @@ export type Lead = {
   createdAt: string
 }
 
-export type ContentType = 'products' | 'cases' | 'posts' | 'storeCards'
+export type ContentType = 'products' | 'cases' | 'designs' | 'posts' | 'storeCards'
 
 export type UploadResult = {
   key: string

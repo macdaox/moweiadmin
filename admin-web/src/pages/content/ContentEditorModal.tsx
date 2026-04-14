@@ -1,11 +1,11 @@
-import type { CaseItem, ContentType, PostItem, Product, StoreCard } from '@/api/types'
+import type { CaseItem, ContentType, DesignItem, PostItem, Product, StoreCard } from '@/api/types'
 import Modal from '@/components/Modal'
 import { joinLines, splitLines } from '@/pages/content/contentUtils'
 import { useEffect, useMemo, useState } from 'react'
 import { uploadImage } from '@/api/admin'
 import { useAuth } from '@/store/auth'
 
-type AnyItem = Product | CaseItem | PostItem | StoreCard
+type AnyItem = Product | CaseItem | DesignItem | PostItem | StoreCard
 
 type Draft = Record<string, string>
 
@@ -31,6 +31,15 @@ function initDraft(type: ContentType, editing: AnyItem | null): Draft {
       coverUrl: v?.coverUrl || '',
       imagesText: joinLines(v?.images || []),
       tagsText: joinLines(v?.tags || [])
+    }
+  }
+  if (type === 'designs') {
+    const v = editing as DesignItem | null
+    return {
+      title: v?.title || '',
+      status: v?.status || 'enabled',
+      coverUrl: v?.coverUrl || '',
+      imagesText: joinLines(v?.images || [])
     }
   }
   if (type === 'posts') {
@@ -74,6 +83,12 @@ function buildPayload(type: ContentType, draft: Draft) {
     payload.coverUrl = draft.coverUrl || ''
     payload.images = splitLines(draft.imagesText || '')
     payload.tags = splitLines(draft.tagsText || '')
+  }
+  if (type === 'designs') {
+    payload.title = draft.title || ''
+    payload.status = draft.status || 'enabled'
+    payload.coverUrl = draft.coverUrl || ''
+    payload.images = splitLines(draft.imagesText || '')
   }
   if (type === 'posts') {
     payload.title = draft.title || ''
@@ -276,7 +291,7 @@ export default function ContentEditorModal({
                 />
               </div>
             ) : null}
-            {type === 'products' || type === 'cases' ? (
+            {type === 'products' || type === 'cases' || type === 'designs' ? (
               <div className="md:col-span-2">
                 <div className="text-xs font-medium text-zinc-700">封面</div>
                 <input
@@ -330,7 +345,7 @@ export default function ContentEditorModal({
                 />
               </div>
             ) : null}
-            {type === 'products' || type === 'cases' || type === 'posts' ? (
+            {type === 'products' || type === 'cases' || type === 'designs' || type === 'posts' ? (
               <div className="md:col-span-2">
                 <div className="text-xs font-medium text-zinc-700">图片</div>
                 <input

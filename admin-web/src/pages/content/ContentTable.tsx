@@ -20,6 +20,7 @@ export default function ContentTable({
   const cols = (() => {
     if (type === 'products') return ['标题', '价格', '状态', '更新时间']
     if (type === 'cases') return ['标题', '状态', '更新时间']
+    if (type === 'designs') return ['标题', '状态', '更新时间']
     if (type === 'posts') return ['标题', '状态', '更新时间']
     return ['门店名', '电话', '状态', '更新时间']
   })()
@@ -91,4 +92,3 @@ export default function ContentTable({
     </div>
   )
 }
-

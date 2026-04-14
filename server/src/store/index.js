@@ -28,6 +28,7 @@ const settingsFile = path.join(dataDir, 'app_settings.json')
 const entityFiles = {
   products: path.join(dataDir, 'products.json'),
   cases: path.join(dataDir, 'cases.json'),
+  designs: path.join(dataDir, 'designs.json'),
   posts: path.join(dataDir, 'posts.json'),
   storeCards: path.join(dataDir, 'store_cards.json'),
   categories: path.join(dataDir, 'categories.json')
@@ -114,6 +115,19 @@ async function ensureMySQLSchema() {
   )
   await pool.query(
     `
+      CREATE TABLE IF NOT EXISTS designs (
+        id VARCHAR(64) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        status VARCHAR(32) NOT NULL,
+        cover_url VARCHAR(512) NULL,
+        images_json TEXT NULL,
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL
+      )
+    `
+  )
+  await pool.query(
+    `
       CREATE TABLE IF NOT EXISTS posts (
         id VARCHAR(64) PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -168,6 +182,7 @@ async function ensureMySQLSchema() {
         address TEXT NULL,
         latitude DECIMAL(10,6) NULL,
         longitude DECIMAL(10,6) NULL,
+        banners_json TEXT NULL,
         home_nav_title VARCHAR(255) NULL,
         home_search_placeholder VARCHAR(255) NULL,
         home_case_title VARCHAR(255) NULL,
@@ -180,6 +195,7 @@ async function ensureMySQLSchema() {
     `
   )
 
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN banners_json TEXT NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_nav_title VARCHAR(255) NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_search_placeholder VARCHAR(255) NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_case_title VARCHAR(255) NULL')
@@ -198,6 +214,7 @@ function defaultSettings() {
     address: '',
     latitude: null,
     longitude: null,
+    homeBanners: [],
     homeNavTitle: '',
     homeSearchPlaceholder: '请输入您想要搜索的产品',
     homeCaseTitle: '金华地区 | 上千家落地案例',
@@ -323,6 +340,14 @@ function sanitize(entity, input) {
       tags: asStringArray(src.tags)
     }
   }
+  if (entity === 'designs') {
+    return {
+      title: String(src.title || '').trim(),
+      status: normalizeStatus(src.status),
+      coverUrl: String(src.coverUrl || '').trim(),
+      images: asStringArray(src.images)
+    }
+  }
   if (entity === 'posts') {
     return {
       title: String(src.title || '').trim(),
@@ -358,6 +383,7 @@ function sanitize(entity, input) {
 function requiredOk(entity, value) {
   if (entity === 'products') return !!value.title
   if (entity === 'cases') return !!value.title
+  if (entity === 'designs') return !!value.title
   if (entity === 'posts') return !!value.title
   if (entity === 'storeCards') return !!value.storeName
   if (entity === 'categories') return !!value.name
@@ -388,6 +414,7 @@ function matchEntity(entity, item, keyword) {
   if (!k) return true
   if (entity === 'products') return `${item.title || ''} ${item.description || ''} ${item.categoryId || ''}`.includes(k)
   if (entity === 'cases') return `${item.title || ''} ${item.summary || ''} ${item.content || ''}`.includes(k)
+  if (entity === 'designs') return `${item.title || ''}`.includes(k)
   if (entity === 'posts') return `${item.title || ''} ${item.content || ''}`.includes(k)
   if (entity === 'storeCards') return `${item.storeName || ''} ${item.contactName || ''} ${item.phone || ''} ${item.address || ''}`.includes(k)
   if (entity === 'categories') return `${item.name || ''} ${item.icon || ''}`.includes(k)
@@ -450,6 +477,23 @@ async function listEntities(entity, { limit, offset, q }) {
         coverUrl: r.coverUrl || '',
         images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         tags: r.tagsJson ? safeJSON(r.tagsJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    if (entity === 'designs') {
+      const where = keyword ? 'WHERE title LIKE ?' : ''
+      const params = keyword ? [`%${keyword}%`, take, skip] : [take, skip]
+      const [rows] = await pool.query(
+        `SELECT id, title, status, cover_url AS coverUrl, images_json AS imagesJson, created_at AS createdAt, updated_at AS updatedAt FROM designs ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        params
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        coverUrl: r.coverUrl || '',
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         createdAt: new Date(r.createdAt).toISOString(),
         updatedAt: new Date(r.updatedAt).toISOString()
       }))
@@ -533,6 +577,12 @@ async function countEntities(entity, { q }) {
       const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM cases ${where}`, params)
       return Number(rows && rows[0] ? rows[0].c : 0)
     }
+    if (entity === 'designs') {
+      const where = keyword ? 'WHERE title LIKE ?' : ''
+      const params = keyword ? [`%${keyword}%`] : []
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM designs ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
     if (entity === 'posts') {
       const where = keyword ? 'WHERE title LIKE ? OR content LIKE ?' : ''
       const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : []
@@ -599,6 +649,23 @@ async function getEntity(entity, id) {
         coverUrl: r.coverUrl || '',
         images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         tags: r.tagsJson ? safeJSON(r.tagsJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }
+    }
+    if (entity === 'designs') {
+      const [rows] = await pool.query(
+        'SELECT id, title, status, cover_url AS coverUrl, images_json AS imagesJson, created_at AS createdAt, updated_at AS updatedAt FROM designs WHERE id = ? LIMIT 1',
+        [key]
+      )
+      const r = rows && rows[0] ? rows[0] : null
+      if (!r) return null
+      return {
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        coverUrl: r.coverUrl || '',
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         createdAt: new Date(r.createdAt).toISOString(),
         updatedAt: new Date(r.updatedAt).toISOString()
       }
@@ -710,6 +777,21 @@ async function createEntity(entity, input) {
       )
       return item
     }
+    if (entity === 'designs') {
+      await pool.query(
+        'INSERT INTO designs (id, title, status, cover_url, images_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          item.id,
+          item.title,
+          item.status,
+          item.coverUrl || null,
+          item.images && item.images.length ? JSON.stringify(item.images) : null,
+          new Date(item.createdAt),
+          new Date(item.updatedAt)
+        ]
+      )
+      return item
+    }
     if (entity === 'posts') {
       await pool.query(
         'INSERT INTO posts (id, title, content, status, images_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -814,6 +896,22 @@ async function updateEntity(entity, id, input) {
       if (!item) throw new Error('not found')
       return item
     }
+    if (entity === 'designs') {
+      await pool.query(
+        'UPDATE designs SET title=?, status=?, cover_url=?, images_json=?, updated_at=? WHERE id=?',
+        [
+          value.title,
+          value.status,
+          value.coverUrl || null,
+          value.images && value.images.length ? JSON.stringify(value.images) : null,
+          new Date(updatedAt),
+          key
+        ]
+      )
+      const item = await getEntity(entity, key)
+      if (!item) throw new Error('not found')
+      return item
+    }
     if (entity === 'posts') {
       await pool.query(
         'UPDATE posts SET title=?, content=?, status=?, images_json=?, updated_at=? WHERE id=?',
@@ -895,6 +993,13 @@ async function deleteEntity(entity, id) {
 function sanitizeSettings(input) {
   const src = input && typeof input === 'object' ? input : {}
   const updatedAt = nowISO()
+  const banners = Array.isArray(src.homeBanners) ? src.homeBanners : []
+  const homeBanners = banners
+    .map((b) => ({
+      imageUrl: String(b && b.imageUrl ? b.imageUrl : '').trim(),
+      path: String(b && b.path ? b.path : '').trim()
+    }))
+    .filter((b) => !!b.imageUrl)
   return {
     id: 'default',
     shopName: String(src.shopName || '').trim(),
@@ -903,6 +1008,7 @@ function sanitizeSettings(input) {
     address: String(src.address || '').trim(),
     latitude: src.latitude === '' || src.latitude === null || typeof src.latitude === 'undefined' ? null : asNumber(src.latitude),
     longitude: src.longitude === '' || src.longitude === null || typeof src.longitude === 'undefined' ? null : asNumber(src.longitude),
+    homeBanners,
     homeNavTitle: String(src.homeNavTitle || '').trim(),
     homeSearchPlaceholder: String(src.homeSearchPlaceholder || '').trim(),
     homeCaseTitle: String(src.homeCaseTitle || '').trim(),
@@ -917,7 +1023,7 @@ function sanitizeSettings(input) {
 async function getSettings() {
   if (mode === 'mysql') {
     const [rows] = await pool.query(
-      'SELECT id, shop_name AS shopName, phone, wechat_id AS wechatId, address, latitude, longitude, home_nav_title AS homeNavTitle, home_search_placeholder AS homeSearchPlaceholder, home_case_title AS homeCaseTitle, home_case_sub_title AS homeCaseSubTitle, home_design_title AS homeDesignTitle, home_design_sub_title AS homeDesignSubTitle, home_products_title AS homeProductsTitle, updated_at AS updatedAt FROM app_settings WHERE id = ? LIMIT 1',
+      'SELECT id, shop_name AS shopName, phone, wechat_id AS wechatId, address, latitude, longitude, banners_json AS bannersJson, home_nav_title AS homeNavTitle, home_search_placeholder AS homeSearchPlaceholder, home_case_title AS homeCaseTitle, home_case_sub_title AS homeCaseSubTitle, home_design_title AS homeDesignTitle, home_design_sub_title AS homeDesignSubTitle, home_products_title AS homeProductsTitle, updated_at AS updatedAt FROM app_settings WHERE id = ? LIMIT 1',
       ['default']
     )
     const r = rows && rows[0] ? rows[0] : null
@@ -937,6 +1043,7 @@ async function getSettings() {
       address: r.address || '',
       latitude: r.latitude === null ? null : Number(r.latitude),
       longitude: r.longitude === null ? null : Number(r.longitude),
+      homeBanners: r.bannersJson ? safeJSON(r.bannersJson) || [] : [],
       homeNavTitle: r.homeNavTitle || '',
       homeSearchPlaceholder: r.homeSearchPlaceholder || '请输入您想要搜索的产品',
       homeCaseTitle: r.homeCaseTitle || '金华地区 | 上千家落地案例',
@@ -960,6 +1067,7 @@ async function getSettings() {
       address: v && typeof v.address === 'string' ? v.address : d.address,
       latitude: v && typeof v.latitude === 'number' ? v.latitude : null,
       longitude: v && typeof v.longitude === 'number' ? v.longitude : null,
+      homeBanners: v && Array.isArray(v.homeBanners) ? v.homeBanners : d.homeBanners,
       homeNavTitle: v && typeof v.homeNavTitle === 'string' ? v.homeNavTitle : d.homeNavTitle,
       homeSearchPlaceholder: v && typeof v.homeSearchPlaceholder === 'string' ? v.homeSearchPlaceholder : d.homeSearchPlaceholder,
       homeCaseTitle: v && typeof v.homeCaseTitle === 'string' ? v.homeCaseTitle : d.homeCaseTitle,
@@ -979,9 +1087,10 @@ async function updateSettings(input) {
   if (mode === 'mysql') {
     const [rows] = await pool.query('SELECT id FROM app_settings WHERE id = ? LIMIT 1', ['default'])
     const exists = !!(rows && rows[0])
+    const bannersJson = v.homeBanners && v.homeBanners.length ? JSON.stringify(v.homeBanners) : null
     if (exists) {
       await pool.query(
-        'UPDATE app_settings SET shop_name=?, phone=?, wechat_id=?, address=?, latitude=?, longitude=?, home_nav_title=?, home_search_placeholder=?, home_case_title=?, home_case_sub_title=?, home_design_title=?, home_design_sub_title=?, home_products_title=?, updated_at=? WHERE id=?',
+        'UPDATE app_settings SET shop_name=?, phone=?, wechat_id=?, address=?, latitude=?, longitude=?, banners_json=?, home_nav_title=?, home_search_placeholder=?, home_case_title=?, home_case_sub_title=?, home_design_title=?, home_design_sub_title=?, home_products_title=?, updated_at=? WHERE id=?',
         [
           v.shopName || null,
           v.phone || null,
@@ -989,6 +1098,7 @@ async function updateSettings(input) {
           v.address || null,
           v.latitude,
           v.longitude,
+          bannersJson,
           v.homeNavTitle || null,
           v.homeSearchPlaceholder || null,
           v.homeCaseTitle || null,
@@ -1002,7 +1112,7 @@ async function updateSettings(input) {
       )
     } else {
       await pool.query(
-        'INSERT INTO app_settings (id, shop_name, phone, wechat_id, address, latitude, longitude, home_nav_title, home_search_placeholder, home_case_title, home_case_sub_title, home_design_title, home_design_sub_title, home_products_title, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO app_settings (id, shop_name, phone, wechat_id, address, latitude, longitude, banners_json, home_nav_title, home_search_placeholder, home_case_title, home_case_sub_title, home_design_title, home_design_sub_title, home_products_title, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           'default',
           v.shopName || null,
@@ -1011,6 +1121,7 @@ async function updateSettings(input) {
           v.address || null,
           v.latitude,
           v.longitude,
+          bannersJson,
           v.homeNavTitle || null,
           v.homeSearchPlaceholder || null,
           v.homeCaseTitle || null,
@@ -1097,6 +1208,28 @@ async function listPublicEntities(entity, { limit, offset, q, categoryId, tag })
         coverUrl: r.coverUrl || '',
         images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         tags: r.tagsJson ? safeJSON(r.tagsJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    if (entity === 'designs') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ?)')
+        params.push(`%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(
+        `SELECT id, title, status, cover_url AS coverUrl, images_json AS imagesJson, created_at AS createdAt, updated_at AS updatedAt FROM designs ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, skip]
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        coverUrl: r.coverUrl || '',
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
         createdAt: new Date(r.createdAt).toISOString(),
         updatedAt: new Date(r.updatedAt).toISOString()
       }))
@@ -1197,6 +1330,17 @@ async function countPublicEntities(entity, { q, categoryId, tag }) {
       }
       const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
       const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM cases ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
+    if (entity === 'designs') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ?)')
+        params.push(`%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM designs ${where}`, params)
       return Number(rows && rows[0] ? rows[0].c : 0)
     }
     if (entity === 'posts') {

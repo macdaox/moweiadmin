@@ -80,6 +80,7 @@ function parsePublicEntityName(v) {
   const s = String(v || '').trim()
   if (s === 'products') return 'products'
   if (s === 'cases') return 'cases'
+  if (s === 'designs') return 'designs'
   if (s === 'posts') return 'posts'
   if (s === 'store-cards') return 'storeCards'
   if (s === 'storeCards') return 'storeCards'
@@ -247,6 +248,7 @@ function parseEntityName(v) {
   const s = String(v || '').trim()
   if (s === 'products') return 'products'
   if (s === 'cases') return 'cases'
+  if (s === 'designs') return 'designs'
   if (s === 'posts') return 'posts'
   if (s === 'store-cards') return 'storeCards'
   if (s === 'storeCards') return 'storeCards'
