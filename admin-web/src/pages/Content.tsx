@@ -129,7 +129,7 @@ export default function Content() {
         items={items}
         loading={loading}
         onEdit={(it) => {
-          setEditing(it)
+          setEditing(it as unknown as AnyItem)
           setOpen(true)
         }}
         onDelete={onDelete}

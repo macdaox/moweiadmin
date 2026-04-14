@@ -5,6 +5,7 @@ import { createCategory, deleteCategory, getSettings, listCategories, updateCate
 import type { AppSettings, Category } from '@/api/types'
 
 type Tab = 'categories' | 'app'
+type DraftCategory = { id: string; name: string; icon: string; sort: number | null; status: 'enabled' | 'disabled' }
 
 function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
@@ -45,18 +46,15 @@ export default function Settings() {
   const [editing, setEditing] = useState<Category | null>(null)
   const [open, setOpen] = useState(false)
 
-  const initialCategory = useMemo(
-    () => ({ id: '', name: '', icon: '', sort: null as number | null, status: 'enabled' as const }),
-    []
-  )
-  const [draft, setDraft] = useState(initialCategory)
+  const initialCategory: DraftCategory = useMemo(() => ({ id: '', name: '', icon: '', sort: null, status: 'enabled' }), [])
+  const [draft, setDraft] = useState<DraftCategory>(initialCategory)
 
   async function refreshCategories() {
     if (!token) return
     setLoading(true)
     try {
       const r = await listCategories(token, q, 200, 0)
-      if (r.ok) setCategories(r.data.items)
+      setCategories(r.items)
     } finally {
       setLoading(false)
     }
@@ -67,7 +65,7 @@ export default function Settings() {
     setLoading(true)
     try {
       const r = await getSettings(token)
-      if (r.ok) setSettings(r.data)
+      setSettings(r)
     } finally {
       setLoading(false)
     }
