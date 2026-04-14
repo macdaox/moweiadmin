@@ -26,12 +26,12 @@ export default function Modal({
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onMouseDown={onClose}>
       <div
-        className={cn('w-full rounded-xl bg-white shadow-xl', width)}
+        className={cn('max-h-[calc(100vh-2rem)] w-full rounded-xl bg-white shadow-xl', width, 'flex flex-col')}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-5 py-4">
           <div className="text-sm font-semibold text-zinc-900">{title}</div>
           <button
             type="button"
@@ -41,9 +41,8 @@ export default function Modal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   )
 }
-
