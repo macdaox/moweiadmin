@@ -23,6 +23,35 @@ const app = express()
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
 
+app.get('/', async (req, res) => {
+  const accept = String(req.headers.accept || '')
+  if (accept.includes('text/html')) {
+    res.setHeader('content-type', 'text/html; charset=utf-8')
+    res.end(
+      [
+        '<!doctype html>',
+        '<html lang="zh-CN">',
+        '<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>API 服务已启动</title></head>',
+        '<body style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial; padding: 20px;">',
+        '<h2>后台 API 服务已启动</h2>',
+        '<ul>',
+        '<li>健康检查：<a href="/health">/health</a></li>',
+        '<li>小程序读取设置：<a href="/api/public/settings">/api/public/settings</a></li>',
+        '<li>小程序读取分类：<a href="/api/public/categories">/api/public/categories</a></li>',
+        '</ul>',
+        '</body></html>'
+      ].join('')
+    )
+    return
+  }
+
+  res.json({
+    ok: true,
+    service: 'mowei-backend',
+    endpoints: ['/health', '/api/public/settings', '/api/public/categories', '/api/admin/login']
+  })
+})
+
 app.get('/health', async (_req, res) => {
   res.json({ ok: true })
 })
