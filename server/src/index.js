@@ -17,6 +17,10 @@ const {
   getSettings,
   updateSettings,
   listPublicCategories,
+  listPublicEntities,
+  countPublicEntities,
+  getPublicEntity,
+  listPublicCaseTags,
   initStore
 } = require('./store')
 const { ensureAuthConfigured, verifyCredentials, signToken, requireAdmin } = require('./auth')
@@ -60,6 +64,59 @@ app.get('/api/public/categories', async (_req, res) => {
   try {
     const items = await listPublicCategories()
     res.json({ ok: true, data: items })
+  } catch (_e) {
+    res.status(500).json({ ok: false, message: 'internal error' })
+  }
+})
+
+function parsePublicEntityName(v) {
+  const s = String(v || '').trim()
+  if (s === 'products') return 'products'
+  if (s === 'cases') return 'cases'
+  if (s === 'posts') return 'posts'
+  if (s === 'store-cards') return 'storeCards'
+  if (s === 'storeCards') return 'storeCards'
+  return ''
+}
+
+app.get('/api/public/case-tags', async (_req, res) => {
+  try {
+    const items = await listPublicCaseTags()
+    res.json({ ok: true, data: items })
+  } catch (_e) {
+    res.status(500).json({ ok: false, message: 'internal error' })
+  }
+})
+
+app.get('/api/public/:entity', async (req, res) => {
+  const entity = parsePublicEntityName(req.params.entity)
+  if (!entity) {
+    res.status(404).json({ ok: false, message: 'not found' })
+    return
+  }
+  try {
+    const { limit, offset, q, categoryId, tag } = req.query
+    const items = await listPublicEntities(entity, { limit, offset, q, categoryId, tag })
+    const total = await countPublicEntities(entity, { q, categoryId, tag })
+    res.json({ ok: true, data: { items, total } })
+  } catch (_e) {
+    res.status(500).json({ ok: false, message: 'internal error' })
+  }
+})
+
+app.get('/api/public/:entity/:id', async (req, res) => {
+  const entity = parsePublicEntityName(req.params.entity)
+  if (!entity) {
+    res.status(404).json({ ok: false, message: 'not found' })
+    return
+  }
+  try {
+    const item = await getPublicEntity(entity, req.params.id)
+    if (!item) {
+      res.status(404).json({ ok: false, message: 'not found' })
+      return
+    }
+    res.json({ ok: true, data: item })
   } catch (_e) {
     res.status(500).json({ ok: false, message: 'internal error' })
   }

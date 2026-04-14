@@ -59,6 +59,12 @@ async function initStore() {
 }
 
 async function ensureMySQLSchema() {
+  async function tryAlter(sql) {
+    try {
+      await pool.query(sql)
+    } catch (_e) {}
+  }
+
   await pool.query(
     `
       CREATE TABLE IF NOT EXISTS leads (
@@ -78,6 +84,7 @@ async function ensureMySQLSchema() {
         id VARCHAR(64) PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         description TEXT NULL,
+        category_id VARCHAR(64) NULL,
         price DECIMAL(12,2) NULL,
         status VARCHAR(32) NOT NULL,
         cover_url VARCHAR(512) NULL,
@@ -88,6 +95,7 @@ async function ensureMySQLSchema() {
       )
     `
   )
+  await tryAlter('ALTER TABLE products ADD COLUMN category_id VARCHAR(64) NULL')
   await pool.query(
     `
       CREATE TABLE IF NOT EXISTS cases (
@@ -171,6 +179,14 @@ async function ensureMySQLSchema() {
       )
     `
   )
+
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_nav_title VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_search_placeholder VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_case_title VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_case_sub_title VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_design_title VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_design_sub_title VARCHAR(255) NULL')
+  await tryAlter('ALTER TABLE app_settings ADD COLUMN home_products_title VARCHAR(255) NULL')
 }
 
 function defaultSettings() {
@@ -288,6 +304,7 @@ function sanitize(entity, input) {
     return {
       title: String(src.title || '').trim(),
       description: String(src.description || '').trim(),
+      categoryId: String(src.categoryId || '').trim(),
       price: src.price === '' || src.price === null || typeof src.price === 'undefined' ? null : asNumber(src.price),
       status: normalizeStatus(src.status),
       coverUrl: String(src.coverUrl || '').trim(),
@@ -369,7 +386,7 @@ function matchEntity(entity, item, keyword) {
   if (!keyword) return true
   const k = String(keyword).trim()
   if (!k) return true
-  if (entity === 'products') return `${item.title || ''} ${item.description || ''}`.includes(k)
+  if (entity === 'products') return `${item.title || ''} ${item.description || ''} ${item.categoryId || ''}`.includes(k)
   if (entity === 'cases') return `${item.title || ''} ${item.summary || ''} ${item.content || ''}`.includes(k)
   if (entity === 'posts') return `${item.title || ''} ${item.content || ''}`.includes(k)
   if (entity === 'storeCards') return `${item.storeName || ''} ${item.contactName || ''} ${item.phone || ''} ${item.address || ''}`.includes(k)
@@ -400,13 +417,14 @@ async function listEntities(entity, { limit, offset, q }) {
       const where = keyword ? 'WHERE title LIKE ? OR description LIKE ?' : ''
       const params = keyword ? [`%${keyword}%`, `%${keyword}%`, take, skip] : [take, skip]
       const [rows] = await pool.query(
-        `SELECT id, title, description, price, status, cover_url AS coverUrl, images_json AS imagesJson, skus_json AS skusJson, created_at AS createdAt, updated_at AS updatedAt FROM products ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        `SELECT id, title, description, category_id AS categoryId, price, status, cover_url AS coverUrl, images_json AS imagesJson, skus_json AS skusJson, created_at AS createdAt, updated_at AS updatedAt FROM products ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
         params
       )
       return rows.map((r) => ({
         id: r.id,
         title: r.title,
         description: r.description || '',
+        categoryId: r.categoryId || '',
         price: r.price === null ? null : Number(r.price),
         status: r.status,
         coverUrl: r.coverUrl || '',
@@ -546,7 +564,7 @@ async function getEntity(entity, id) {
   if (mode === 'mysql') {
     if (entity === 'products') {
       const [rows] = await pool.query(
-        'SELECT id, title, description, price, status, cover_url AS coverUrl, images_json AS imagesJson, skus_json AS skusJson, created_at AS createdAt, updated_at AS updatedAt FROM products WHERE id = ? LIMIT 1',
+        'SELECT id, title, description, category_id AS categoryId, price, status, cover_url AS coverUrl, images_json AS imagesJson, skus_json AS skusJson, created_at AS createdAt, updated_at AS updatedAt FROM products WHERE id = ? LIMIT 1',
         [key]
       )
       const r = rows && rows[0] ? rows[0] : null
@@ -555,6 +573,7 @@ async function getEntity(entity, id) {
         id: r.id,
         title: r.title,
         description: r.description || '',
+        categoryId: r.categoryId || '',
         price: r.price === null ? null : Number(r.price),
         status: r.status,
         coverUrl: r.coverUrl || '',
@@ -656,11 +675,12 @@ async function createEntity(entity, input) {
   if (mode === 'mysql') {
     if (entity === 'products') {
       await pool.query(
-        'INSERT INTO products (id, title, description, price, status, cover_url, images_json, skus_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO products (id, title, description, category_id, price, status, cover_url, images_json, skus_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           item.id,
           item.title,
           item.description || null,
+          item.categoryId || null,
           item.price === null ? null : item.price,
           item.status,
           item.coverUrl || null,
@@ -757,10 +777,11 @@ async function updateEntity(entity, id, input) {
   if (mode === 'mysql') {
     if (entity === 'products') {
       await pool.query(
-        'UPDATE products SET title=?, description=?, price=?, status=?, cover_url=?, images_json=?, skus_json=?, updated_at=? WHERE id=?',
+        'UPDATE products SET title=?, description=?, category_id=?, price=?, status=?, cover_url=?, images_json=?, skus_json=?, updated_at=? WHERE id=?',
         [
           value.title,
           value.description || null,
+          value.categoryId || null,
           value.price === null ? null : value.price,
           value.status,
           value.coverUrl || null,
@@ -1013,6 +1034,219 @@ async function listPublicCategories() {
   return items.filter((x) => x.status !== 'disabled')
 }
 
+async function listPublicEntities(entity, { limit, offset, q, categoryId, tag }) {
+  const take = Math.min(200, Math.max(1, Number(limit) || 50))
+  const skip = Math.max(0, Number(offset) || 0)
+  const keyword = String(q || '').trim()
+  const cat = String(categoryId || '').trim()
+  const t = String(tag || '').trim()
+
+  if (mode === 'mysql') {
+    if (entity === 'products') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR description LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`)
+      }
+      if (cat) {
+        wheres.push('category_id = ?')
+        params.push(cat)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(
+        `SELECT id, title, description, category_id AS categoryId, price, status, cover_url AS coverUrl, images_json AS imagesJson, skus_json AS skusJson, created_at AS createdAt, updated_at AS updatedAt FROM products ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, skip]
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description || '',
+        categoryId: r.categoryId || '',
+        price: r.price === null ? null : Number(r.price),
+        status: r.status,
+        coverUrl: r.coverUrl || '',
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
+        skus: r.skusJson ? safeJSON(r.skusJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    if (entity === 'cases') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR summary LIKE ? OR content LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+      }
+      if (t) {
+        wheres.push('tags_json LIKE ?')
+        params.push(`%${t}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(
+        `SELECT id, title, summary, content, status, cover_url AS coverUrl, images_json AS imagesJson, tags_json AS tagsJson, created_at AS createdAt, updated_at AS updatedAt FROM cases ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, skip]
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        summary: r.summary || '',
+        content: r.content || '',
+        status: r.status,
+        coverUrl: r.coverUrl || '',
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
+        tags: r.tagsJson ? safeJSON(r.tagsJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    if (entity === 'posts') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR content LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(
+        `SELECT id, title, content, status, images_json AS imagesJson, created_at AS createdAt, updated_at AS updatedAt FROM posts ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, skip]
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        content: r.content || '',
+        status: r.status,
+        images: r.imagesJson ? safeJSON(r.imagesJson) || [] : [],
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    if (entity === 'storeCards') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(store_name LIKE ? OR contact_name LIKE ? OR phone LIKE ? OR address LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(
+        `SELECT id, store_name AS storeName, contact_name AS contactName, phone, wechat_id AS wechatId, address, latitude, longitude, intro, status, created_at AS createdAt, updated_at AS updatedAt FROM store_cards ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, skip]
+      )
+      return rows.map((r) => ({
+        id: r.id,
+        storeName: r.storeName,
+        contactName: r.contactName || '',
+        phone: r.phone || '',
+        wechatId: r.wechatId || '',
+        address: r.address || '',
+        latitude: r.latitude === null ? null : Number(r.latitude),
+        longitude: r.longitude === null ? null : Number(r.longitude),
+        intro: r.intro || '',
+        status: r.status,
+        createdAt: new Date(r.createdAt).toISOString(),
+        updatedAt: new Date(r.updatedAt).toISOString()
+      }))
+    }
+    return []
+  }
+
+  const items = await listEntities(entity, { limit: 1000, offset: 0, q: keyword })
+  const enabled = items.filter((x) => x.status !== 'disabled')
+  const filtered =
+    entity === 'products' && cat
+      ? enabled.filter((x) => String(x.categoryId || '') === cat)
+      : entity === 'cases' && t
+        ? enabled.filter((x) => Array.isArray(x.tags) && x.tags.includes(t))
+        : enabled
+  return filtered.slice(skip, skip + take)
+}
+
+async function countPublicEntities(entity, { q, categoryId, tag }) {
+  const keyword = String(q || '').trim()
+  const cat = String(categoryId || '').trim()
+  const t = String(tag || '').trim()
+  if (mode === 'mysql') {
+    if (entity === 'products') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR description LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`)
+      }
+      if (cat) {
+        wheres.push('category_id = ?')
+        params.push(cat)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM products ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
+    if (entity === 'cases') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR summary LIKE ? OR content LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+      }
+      if (t) {
+        wheres.push('tags_json LIKE ?')
+        params.push(`%${t}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM cases ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
+    if (entity === 'posts') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(title LIKE ? OR content LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM posts ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
+    if (entity === 'storeCards') {
+      const wheres = ["status <> 'disabled'"]
+      const params = []
+      if (keyword) {
+        wheres.push('(store_name LIKE ? OR contact_name LIKE ? OR phone LIKE ? OR address LIKE ?)')
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+      }
+      const where = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
+      const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM store_cards ${where}`, params)
+      return Number(rows && rows[0] ? rows[0].c : 0)
+    }
+    return 0
+  }
+  const items = await listPublicEntities(entity, { limit: 1000, offset: 0, q: keyword, categoryId: cat, tag: t })
+  return items.length
+}
+
+async function getPublicEntity(entity, id) {
+  const item = await getEntity(entity, id)
+  if (!item) return null
+  if (String(item.status || '') === 'disabled') return null
+  return item
+}
+
+async function listPublicCaseTags() {
+  const items = await listPublicEntities('cases', { limit: 500, offset: 0, q: '' })
+  const set = new Set()
+  for (const it of items) {
+    const tags = Array.isArray(it.tags) ? it.tags : []
+    for (const x of tags) {
+      const s = String(x || '').trim()
+      if (s) set.add(s)
+    }
+  }
+  return Array.from(set).slice(0, 200)
+}
+
 function safeJSON(s) {
   try {
     return JSON.parse(s)
@@ -1048,5 +1282,9 @@ module.exports = {
   deleteEntity,
   getSettings,
   updateSettings,
-  listPublicCategories
+  listPublicCategories,
+  listPublicEntities,
+  countPublicEntities,
+  getPublicEntity,
+  listPublicCaseTags
 }
