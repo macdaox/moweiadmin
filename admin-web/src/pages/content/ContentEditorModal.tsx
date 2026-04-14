@@ -116,17 +116,22 @@ export default function ContentEditorModal({
   const initial = useMemo(() => initDraft(type, editing), [type, editing])
   const [draft, setDraft] = useState<Draft>(initial)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   useEffect(() => {
     setDraft(initial)
+    setUploadError('')
   }, [initial])
 
   async function onUploadCover(file: File) {
     if (!token) return
     setUploading(true)
+    setUploadError('')
     try {
       const r = await uploadImage(token, file)
       setDraft((d) => ({ ...d, coverUrl: r.url }))
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : '上传失败')
     } finally {
       setUploading(false)
     }
@@ -136,6 +141,7 @@ export default function ContentEditorModal({
     if (!token) return
     if (!files || !files.length) return
     setUploading(true)
+    setUploadError('')
     try {
       const urls: string[] = []
       for (let i = 0; i < files.length; i++) {
@@ -151,6 +157,8 @@ export default function ContentEditorModal({
           return { ...d, imagesText: next }
         })
       }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : '上传失败')
     } finally {
       setUploading(false)
     }
@@ -358,7 +366,9 @@ export default function ContentEditorModal({
         )}
       </div>
 
-      {error ? <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div> : null}
+      {error || uploadError ? (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error || uploadError}</div>
+      ) : null}
 
       <div className="mt-5 flex items-center justify-end gap-2">
         <button
