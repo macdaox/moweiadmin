@@ -42,14 +42,26 @@ async function uploadBufferToCos({ buffer, mimeType, originalName }) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length <= 0) throw new Error('Empty file')
 
   const env = getCloudEnvId()
-  if (!env) mustEnv('CLOUDBASE_ENV_ID')
-
-  if (app && typeof app.init === 'function') app.init({ env })
+  if (app && typeof app.init === 'function') {
+    try {
+      if (env) app.init({ env })
+      else app.init()
+    } catch (e) {
+      const msg = String(e && e.message ? e.message : 'cloudbase init failed')
+      throw new Error(msg)
+    }
+  }
 
   const Prefix = String(process.env.CLOUDBASE_STORAGE_PREFIX || 'uploads/').trim()
   const cloudPath = buildKey(originalName, mimeType, Prefix)
 
-  const result = await app.uploadFile({ cloudPath, fileContent: buffer })
+  let result = null
+  try {
+    result = await app.uploadFile({ cloudPath, fileContent: buffer })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'upload failed')
+    throw new Error(msg)
+  }
   const fileID =
     result && (result.fileID || result.fileId || result.fildID) ? String(result.fileID || result.fileId || result.fildID) : ''
   if (!fileID) throw new Error('upload failed')
