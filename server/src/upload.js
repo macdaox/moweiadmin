@@ -1,5 +1,5 @@
-const COS = require('cos-nodejs-sdk-v5')
 const crypto = require('crypto')
+const app = require('tcb-admin-node')
 
 function mustEnv(name) {
   const v = String(process.env[name] || '').trim()
@@ -7,16 +7,13 @@ function mustEnv(name) {
   return v
 }
 
-function assertBucketName(bucket) {
-  const b = String(bucket || '').trim()
-  if (!b) throw new Error('Invalid COS_BUCKET')
-  if (!/^[a-z0-9-]+-\d{5,}$/.test(b)) throw new Error('Invalid COS_BUCKET')
-}
-
-function assertRegion(region) {
-  const r = String(region || '').trim()
-  if (!r) throw new Error('Invalid COS_REGION')
-  if (!/^[a-z]{2}-[a-z]+$/.test(r)) throw new Error('Invalid COS_REGION')
+function getCloudEnvId() {
+  return (
+    String(process.env.CLOUDBASE_ENV_ID || '').trim() ||
+    String(process.env.TCB_ENV || '').trim() ||
+    String(process.env.WX_CLOUD_ENV_ID || '').trim() ||
+    String(process.env.WX_ENV_ID || '').trim()
+  )
 }
 
 function guessExtFromMime(mime) {
@@ -41,53 +38,23 @@ function buildKey(originalName, mimeType, prefix) {
   return `${safePrefix}${ts}_${rand}.${ext}`
 }
 
-function createCosClient() {
-  const SecretId = mustEnv('COS_SECRET_ID')
-  const SecretKey = mustEnv('COS_SECRET_KEY')
-  return new COS({ SecretId, SecretKey })
-}
-
-function buildPublicUrl({ region, bucket, key }) {
-  const r = String(region || '').trim()
-  const b = String(bucket || '').trim()
-  const k = String(key || '').replace(/^\//, '')
-  if (!r || !b || !k) return ''
-  return `https://${b}.cos.${r}.myqcloud.com/${k}`
-}
-
 async function uploadBufferToCos({ buffer, mimeType, originalName }) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length <= 0) throw new Error('Empty file')
 
-  const Bucket = mustEnv('COS_BUCKET')
-  const Region = mustEnv('COS_REGION')
-  const Prefix = String(process.env.COS_PREFIX || 'uploads/').trim()
+  const env = getCloudEnvId()
+  if (!env) mustEnv('CLOUDBASE_ENV_ID')
 
-  assertBucketName(Bucket)
-  assertRegion(Region)
+  if (app && typeof app.init === 'function') app.init({ env })
 
-  const key = buildKey(originalName, mimeType, Prefix)
-  const cos = createCosClient()
+  const Prefix = String(process.env.CLOUDBASE_STORAGE_PREFIX || 'uploads/').trim()
+  const cloudPath = buildKey(originalName, mimeType, Prefix)
 
-  await new Promise((resolve, reject) => {
-    cos.putObject(
-      {
-        Bucket,
-        Region,
-        Key: key,
-        Body: buffer,
-        ContentType: String(mimeType || 'application/octet-stream')
-      },
-      (err, data) => {
-        if (err) reject(err)
-        else resolve(data)
-      }
-    )
-  })
+  const result = await app.uploadFile({ cloudPath, fileContent: buffer })
+  const fileID =
+    result && (result.fileID || result.fileId || result.fildID) ? String(result.fileID || result.fileId || result.fildID) : ''
+  if (!fileID) throw new Error('upload failed')
 
-  return {
-    key,
-    url: buildPublicUrl({ region: Region, bucket: Bucket, key })
-  }
+  return { key: cloudPath, url: fileID }
 }
 
 module.exports = {

@@ -177,10 +177,6 @@ app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, r
       res.status(500).json({ ok: false, message: msg })
       return
     }
-    if (msg.toLowerCase().includes('invalid cos_')) {
-      res.status(500).json({ ok: false, message: msg })
-      return
-    }
     res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'upload failed' })
   }
 })
