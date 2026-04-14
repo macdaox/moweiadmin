@@ -1,8 +1,8 @@
-FROM node:18-alpine AS build-admin
+FROM node:18-slim AS build-admin
 
 WORKDIR /app
 
-RUN corepack enable
+RUN npm i -g pnpm@9.15.3
 
 COPY admin-web/package.json admin-web/pnpm-lock.yaml ./admin-web/
 
@@ -13,7 +13,7 @@ COPY admin-web ./admin-web
 RUN cd admin-web && pnpm build
 
 
-FROM node:18-alpine AS runtime
+FROM node:18-slim AS runtime
 
 WORKDIR /app
 
