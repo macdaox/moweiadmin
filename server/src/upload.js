@@ -1,19 +1,11 @@
 const crypto = require('crypto')
-const app = require('tcb-admin-node')
+const COS = require('cos-nodejs-sdk-v5')
+const { getTencentCloudTempCredential } = require('./tencentCred')
 
 function mustEnv(name) {
   const v = String(process.env[name] || '').trim()
   if (!v) throw new Error(`Missing env: ${name}`)
   return v
-}
-
-function getCloudEnvId() {
-  const v =
-    String(process.env.CLOUDBASE_ENV_ID || '').trim() ||
-    String(process.env.TCB_ENV || '').trim() ||
-    String(process.env.WX_CLOUD_ENV_ID || '').trim() ||
-    String(process.env.WX_ENV_ID || '').trim()
-  return v || 'prod-7g3e3p72a10289ec'
 }
 
 function guessExtFromMime(mime) {
@@ -41,32 +33,47 @@ function buildKey(originalName, mimeType, prefix) {
 async function uploadBufferToCos({ buffer, mimeType, originalName }) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length <= 0) throw new Error('Empty file')
 
-  const env = getCloudEnvId()
-  if (app && typeof app.init === 'function') {
-    try {
-      if (env) app.init({ env })
-      else app.init()
-    } catch (e) {
-      const msg = String(e && e.message ? e.message : 'cloudbase init failed')
-      throw new Error(msg)
+  const Bucket = mustEnv('COS_BUCKET')
+  const Region = mustEnv('COS_REGION')
+  const Prefix = String(process.env.COS_PREFIX || 'uploads/').trim()
+  const Key = buildKey(originalName, mimeType, Prefix)
+
+  const cos = new COS({
+    getAuthorization: async (_options, callback) => {
+      try {
+        const cred = await getTencentCloudTempCredential()
+        callback({
+          TmpSecretId: cred.secretId,
+          TmpSecretKey: cred.secretKey,
+          SecurityToken: cred.token,
+          StartTime: Math.floor((Date.now() - 60 * 1000) / 1000),
+          ExpiredTime: Math.floor(cred.expiredAt / 1000)
+        })
+      } catch (e) {
+        callback(e)
+      }
     }
-  }
+  })
 
-  const Prefix = String(process.env.CLOUDBASE_STORAGE_PREFIX || 'uploads/').trim()
-  const cloudPath = buildKey(originalName, mimeType, Prefix)
+  await new Promise((resolve, reject) => {
+    cos.putObject(
+      {
+        Bucket,
+        Region,
+        Key,
+        Body: buffer,
+        ContentType: String(mimeType || 'application/octet-stream'),
+        ACL: 'public-read'
+      },
+      (err, data) => {
+        if (err) reject(err)
+        else resolve(data)
+      }
+    )
+  })
 
-  let result = null
-  try {
-    result = await app.uploadFile({ cloudPath, fileContent: buffer })
-  } catch (e) {
-    const msg = String(e && e.message ? e.message : 'upload failed')
-    throw new Error(msg)
-  }
-  const fileID =
-    result && (result.fileID || result.fileId || result.fildID) ? String(result.fileID || result.fileId || result.fildID) : ''
-  if (!fileID) throw new Error('upload failed')
-
-  return { key: cloudPath, url: fileID }
+  const url = `https://${Bucket}.cos.${Region}.myqcloud.com/${Key}`
+  return { key: Key, url }
 }
 
 module.exports = {
