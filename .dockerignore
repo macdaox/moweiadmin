@@ -1,0 +1,16 @@
+.git
+.DS_Store
+.idea
+.vscode
+.trae
+文档
+
+admin-web/node_modules
+admin-web/dist
+admin-web/dist-ssr
+
+server/node_modules
+server/data
+
+**/*.log
+
