@@ -172,12 +172,16 @@ app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, r
     }
     res.json({ ok: true, data: out })
   } catch (e) {
-    const msg = String(e && e.message ? e.message : 'upload failed')
+    const msg = String(e && e.message ? e.message : 'upload failed').trim()
     if (msg.toLowerCase().includes('missing env')) {
-      res.status(500).json({ ok: false, message: 'storage not configured' })
+      res.status(500).json({ ok: false, message: msg })
       return
     }
-    res.status(500).json({ ok: false, message: 'upload failed' })
+    if (msg.toLowerCase().includes('invalid cos_')) {
+      res.status(500).json({ ok: false, message: msg })
+      return
+    }
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'upload failed' })
   }
 })
 

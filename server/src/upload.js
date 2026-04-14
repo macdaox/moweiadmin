@@ -7,6 +7,18 @@ function mustEnv(name) {
   return v
 }
 
+function assertBucketName(bucket) {
+  const b = String(bucket || '').trim()
+  if (!b) throw new Error('Invalid COS_BUCKET')
+  if (!/^[a-z0-9-]+-\d{5,}$/.test(b)) throw new Error('Invalid COS_BUCKET')
+}
+
+function assertRegion(region) {
+  const r = String(region || '').trim()
+  if (!r) throw new Error('Invalid COS_REGION')
+  if (!/^[a-z]{2}-[a-z]+$/.test(r)) throw new Error('Invalid COS_REGION')
+}
+
 function guessExtFromMime(mime) {
   const m = String(mime || '').toLowerCase()
   if (m === 'image/jpeg') return 'jpg'
@@ -50,6 +62,9 @@ async function uploadBufferToCos({ buffer, mimeType, originalName }) {
   const Region = mustEnv('COS_REGION')
   const Prefix = String(process.env.COS_PREFIX || 'uploads/').trim()
 
+  assertBucketName(Bucket)
+  assertRegion(Region)
+
   const key = buildKey(originalName, mimeType, Prefix)
   const cos = createCosClient()
 
@@ -78,4 +93,3 @@ async function uploadBufferToCos({ buffer, mimeType, originalName }) {
 module.exports = {
   uploadBufferToCos
 }
-
