@@ -8,12 +8,12 @@ function mustEnv(name) {
 }
 
 function getCloudEnvId() {
-  return (
+  const v =
     String(process.env.CLOUDBASE_ENV_ID || '').trim() ||
     String(process.env.TCB_ENV || '').trim() ||
     String(process.env.WX_CLOUD_ENV_ID || '').trim() ||
     String(process.env.WX_ENV_ID || '').trim()
-  )
+  return v || 'prod-7g3e3p72a10289ec'
 }
 
 function guessExtFromMime(mime) {

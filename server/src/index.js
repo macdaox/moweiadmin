@@ -154,6 +154,21 @@ app.get('/api/admin/me', requireAdmin, async (req, res) => {
   res.json({ ok: true, data: { email: req.admin && req.admin.email ? req.admin.email : '' } })
 })
 
+app.get('/api/admin/debug/env', requireAdmin, async (_req, res) => {
+  res.json({
+    ok: true,
+    data: {
+      hasCLOUDBASE_ENV_ID: !!String(process.env.CLOUDBASE_ENV_ID || '').trim(),
+      hasTCB_ENV: !!String(process.env.TCB_ENV || '').trim(),
+      hasWX_CLOUD_ENV_ID: !!String(process.env.WX_CLOUD_ENV_ID || '').trim(),
+      hasWX_ENV_ID: !!String(process.env.WX_ENV_ID || '').trim(),
+      hasTENCENTCLOUD_SECRETID: !!String(process.env.TENCENTCLOUD_SECRETID || '').trim(),
+      hasTENCENTCLOUD_SECRETKEY: !!String(process.env.TENCENTCLOUD_SECRETKEY || '').trim(),
+      hasWX_CONTEXT: !!String(process.env.WX_CONTEXT || '').trim()
+    }
+  })
+})
+
 app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, res) => {
   try {
     const f = req.file
