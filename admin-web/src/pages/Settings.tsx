@@ -45,6 +45,7 @@ export default function Settings() {
   const [bannersText, setBannersText] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const [editing, setEditing] = useState<Category | null>(null)
   const [open, setOpen] = useState(false)
 
@@ -105,6 +106,7 @@ export default function Settings() {
     if (!token) return
     if (!files || !files.length) return
     setUploading(true)
+    setUploadError('')
     try {
       const urls: string[] = []
       for (let i = 0; i < files.length; i++) {
@@ -120,6 +122,8 @@ export default function Settings() {
           return curr ? `${curr}\n${add}` : add
         })
       }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : '上传失败')
     } finally {
       setUploading(false)
     }
@@ -326,6 +330,7 @@ export default function Settings() {
                 <textarea className={inputCls} style={{ height: 140 }} value={bannersText} onChange={(e) => setBannersText(e.target.value)} />
               </Field>
             </div>
+            {uploadError ? <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</div> : null}
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-5">
             <div className="text-sm font-semibold text-zinc-900">门店信息</div>

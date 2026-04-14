@@ -1,8 +1,8 @@
 const http = require('http')
 
-function httpGet(url) {
+function httpGet(url, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, { timeout: 2000 }, (res) => {
+    const req = http.get(url, { timeout: timeoutMs || 5000 }, (res) => {
       let buf = ''
       res.setEncoding('utf8')
       res.on('data', (c) => (buf += c))
@@ -15,11 +15,29 @@ function httpGet(url) {
   })
 }
 
+async function tryGet(urls) {
+  let lastErr = null
+  for (const u of urls) {
+    try {
+      const r = await httpGet(u, 5000)
+      return { url: u, res: r }
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr || new Error('timeout')
+}
+
 async function getRoleName() {
   const fixed = String(process.env.TENCENTCLOUD_COS_ROLE_NAME || '').trim()
   if (fixed) return fixed
-  const listUrl = 'http://metadata.tencentyun.com/latest/meta-data/cam/security-credentials/'
-  const r = await httpGet(listUrl)
+
+  const bases = ['http://metadata.tencentyun.com', 'http://169.254.169.254']
+  const paths = ['/latest/meta-data/cam/security-credentials/', '/latest/meta-data/iam/security-credentials/']
+  const urls = []
+  bases.forEach((b) => paths.forEach((p) => urls.push(`${b}${p}`)))
+  const out = await tryGet(urls)
+  const r = out.res
   if (r.status !== 200) throw new Error('missing role')
   const name = String(r.body || '')
     .split('\n')
@@ -42,9 +60,23 @@ async function getTencentCloudTempCredential() {
   if (cached && cached.expiredAt - Date.now() > 60 * 1000) return cached
 
   const role = await getRoleName()
-  const url = `http://metadata.tencentyun.com/latest/meta-data/cam/security-credentials/${encodeURIComponent(role)}`
-  const r = await httpGet(url)
-  if (r.status !== 200) throw new Error('missing secretId or secretKey of tencent cloud')
+  const bases = ['http://metadata.tencentyun.com', 'http://169.254.169.254']
+  const paths = [
+    `/latest/meta-data/cam/security-credentials/${encodeURIComponent(role)}`,
+    `/latest/meta-data/iam/security-credentials/${encodeURIComponent(role)}`
+  ]
+  const urls = []
+  bases.forEach((b) => paths.forEach((p) => urls.push(`${b}${p}`)))
+  let r = null
+  try {
+    const out = await tryGet(urls)
+    r = out.res
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'timeout')
+    if (msg === 'timeout') throw new Error('timeout')
+    throw new Error('missing secretId or secretKey of tencent cloud')
+  }
+  if (!r || r.status !== 200) throw new Error('missing secretId or secretKey of tencent cloud')
   let data = null
   try {
     data = JSON.parse(r.body || '{}')
@@ -64,4 +96,3 @@ async function getTencentCloudTempCredential() {
 module.exports = {
   getTencentCloudTempCredential
 }
-
