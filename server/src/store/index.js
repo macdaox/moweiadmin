@@ -4,12 +4,38 @@ const crypto = require('crypto')
 
 const mysql = require('mysql2/promise')
 
+function getEnv(names) {
+  for (const n of names) {
+    const v = String(process.env[n] || '').trim()
+    if (v) return v
+  }
+  return ''
+}
+
+function parseAddress(addr) {
+  const s = String(addr || '').trim()
+  if (!s) return { host: '', port: 0 }
+  if (s.includes(':')) {
+    const [h, p] = s.split(':')
+    return { host: String(h || '').trim(), port: Number(p) || 0 }
+  }
+  return { host: s, port: 0 }
+}
+
+function getMySQLConfig() {
+  const address = getEnv(['MYSQL_ADDRESS'])
+  const parsed = parseAddress(address)
+  const host = getEnv(['MYSQL_HOST']) || parsed.host
+  const port = Number(getEnv(['MYSQL_PORT'])) || parsed.port || 3306
+  const user = getEnv(['MYSQL_USER', 'MYSQL_USERNAME'])
+  const password = getEnv(['MYSQL_PASSWORD'])
+  const database = getEnv(['MYSQL_DATABASE', 'MYSQL_DB', 'MYSQL_DBNAME'])
+  return { host, port, user, password, database }
+}
+
 function hasMySQLConfig() {
-  return (
-    process.env.MYSQL_HOST &&
-    process.env.MYSQL_USER &&
-    process.env.MYSQL_DATABASE
-  )
+  const cfg = getMySQLConfig()
+  return !!(cfg.host && cfg.user && cfg.database)
 }
 
 function nowISO() {
@@ -37,12 +63,13 @@ const entityFiles = {
 async function initStore() {
   if (hasMySQLConfig()) {
     mode = 'mysql'
+    const cfg = getMySQLConfig()
     pool = mysql.createPool({
-      host: process.env.MYSQL_HOST,
-      port: Number(process.env.MYSQL_PORT) || 3306,
-      user: process.env.MYSQL_USER,
-      password: process.env.MYSQL_PASSWORD || '',
-      database: process.env.MYSQL_DATABASE,
+      host: cfg.host,
+      port: cfg.port,
+      user: cfg.user,
+      password: cfg.password || '',
+      database: cfg.database,
       connectionLimit: 10
     })
     await ensureMySQLSchema()
@@ -1430,5 +1457,6 @@ module.exports = {
   listPublicEntities,
   countPublicEntities,
   getPublicEntity,
-  listPublicCaseTags
+  listPublicCaseTags,
+  getStoreMode: () => mode
 }

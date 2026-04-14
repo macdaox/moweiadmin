@@ -22,6 +22,7 @@ const {
   countPublicEntities,
   getPublicEntity,
   listPublicCaseTags,
+  getStoreMode,
   initStore
 } = require('./store')
 const { ensureAuthConfigured, verifyCredentials, signToken, requireAdmin } = require('./auth')
@@ -168,6 +169,10 @@ app.get('/api/admin/debug/env', requireAdmin, async (_req, res) => {
       hasWX_CONTEXT: !!String(process.env.WX_CONTEXT || '').trim()
     }
   })
+})
+
+app.get('/api/admin/debug/store', requireAdmin, async (_req, res) => {
+  res.json({ ok: true, data: { mode: getStoreMode() } })
 })
 
 app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, res) => {
