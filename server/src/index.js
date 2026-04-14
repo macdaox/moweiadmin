@@ -4,6 +4,7 @@ const path = require('path')
 const fs = require('fs')
 const express = require('express')
 const cors = require('cors')
+const multer = require('multer')
 const {
   createLead,
   listLeads,
@@ -24,10 +25,16 @@ const {
   initStore
 } = require('./store')
 const { ensureAuthConfigured, verifyCredentials, signToken, requireAdmin } = require('./auth')
+const { uploadBufferToCos } = require('./upload')
 
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+})
 
 const adminPublicDir = path.join(__dirname, '../public')
 const adminIndexFile = path.join(adminPublicDir, 'index.html')
@@ -145,6 +152,33 @@ app.post('/api/admin/login', async (req, res) => {
 
 app.get('/api/admin/me', requireAdmin, async (req, res) => {
   res.json({ ok: true, data: { email: req.admin && req.admin.email ? req.admin.email : '' } })
+})
+
+app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const f = req.file
+    if (!f || !f.buffer) {
+      res.status(400).json({ ok: false, message: 'file required' })
+      return
+    }
+    if (!String(f.mimetype || '').toLowerCase().startsWith('image/')) {
+      res.status(400).json({ ok: false, message: 'only image allowed' })
+      return
+    }
+    const out = await uploadBufferToCos({ buffer: f.buffer, mimeType: f.mimetype, originalName: f.originalname })
+    if (!out.url) {
+      res.status(500).json({ ok: false, message: 'upload failed' })
+      return
+    }
+    res.json({ ok: true, data: out })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'upload failed')
+    if (msg.toLowerCase().includes('missing env')) {
+      res.status(500).json({ ok: false, message: 'storage not configured' })
+      return
+    }
+    res.status(500).json({ ok: false, message: 'upload failed' })
+  }
 })
 
 app.post('/api/leads', async (req, res) => {

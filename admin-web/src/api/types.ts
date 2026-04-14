@@ -120,3 +120,8 @@ export type Lead = {
 }
 
 export type ContentType = 'products' | 'cases' | 'posts' | 'storeCards'
+
+export type UploadResult = {
+  key: string
+  url: string
+}

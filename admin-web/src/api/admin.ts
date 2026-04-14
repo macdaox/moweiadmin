@@ -11,7 +11,8 @@ import type {
   CaseItem,
   PostItem,
   StoreCard,
-  Lead
+  Lead,
+  UploadResult
 } from '@/api/types'
 import { requestJson } from '@/api/http'
 
@@ -87,4 +88,22 @@ export function getSettings(token: string) {
 
 export function updateSettings(token: string, payload: unknown) {
   return requestJson<AppSettings>('/api/admin/settings', { token, method: 'PUT', body: payload })
+}
+
+export async function uploadImage(token: string, file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch('/api/admin/upload', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form
+  })
+  const text = await res.text()
+  let data: any = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch (_e) {}
+  if (!res.ok) throw new Error((data && data.message) || `HTTP ${res.status}`)
+  if (!data || !data.ok) throw new Error((data && data.message) || '上传失败')
+  return data.data as UploadResult
 }
