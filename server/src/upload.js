@@ -38,22 +38,8 @@ async function uploadBufferToCos({ buffer, mimeType, originalName }) {
   const Prefix = String(process.env.COS_PREFIX || 'uploads/').trim()
   const Key = buildKey(originalName, mimeType, Prefix)
 
-  const cos = new COS({
-    getAuthorization: async (_options, callback) => {
-      try {
-        const cred = await getTencentCloudTempCredential()
-        callback({
-          TmpSecretId: cred.secretId,
-          TmpSecretKey: cred.secretKey,
-          SecurityToken: cred.token,
-          StartTime: Math.floor((Date.now() - 60 * 1000) / 1000),
-          ExpiredTime: Math.floor(cred.expiredAt / 1000)
-        })
-      } catch (e) {
-        callback(e)
-      }
-    }
-  })
+  const cred = await getTencentCloudTempCredential()
+  const cos = new COS({ SecretId: cred.secretId, SecretKey: cred.secretKey, SecurityToken: cred.token })
 
   await new Promise((resolve, reject) => {
     cos.putObject(
