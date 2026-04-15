@@ -9,6 +9,8 @@ const {
   createLead,
   listLeads,
   countLeads,
+  countUsers,
+  upsertUserProfile,
   listEntities,
   countEntities,
   getEntity,
@@ -264,6 +266,37 @@ app.post('/api/leads', async (req, res) => {
   }
 })
 
+function getWXOpenId(req) {
+  const h = req && req.headers ? req.headers : {}
+  const v =
+    String(h['x-wx-openid'] || '').trim() ||
+    String(h['x-wx-from-openid'] || '').trim() ||
+    String(h['x-wx-source-openid'] || '').trim()
+  return v
+}
+
+app.post('/api/user/profile', async (req, res) => {
+  try {
+    const openid = getWXOpenId(req)
+    if (!openid) {
+      res.status(401).json({ ok: false, message: 'missing openid' })
+      return
+    }
+    const payload = req.body || {}
+    const nickName = String(payload.nickName || '').trim()
+    const avatarUrl = String(payload.avatarUrl || '').trim()
+    if (!nickName || !avatarUrl) {
+      res.status(400).json({ ok: false, message: 'nickName/avatarUrl required' })
+      return
+    }
+    const data = await upsertUserProfile({ openid, nickName, avatarUrl })
+    res.json({ ok: true, data })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'internal error')
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })
+  }
+})
+
 app.get('/api/admin/leads', requireAdmin, async (req, res) => {
   const limit = req.query.limit
   const offset = req.query.offset
@@ -275,15 +308,16 @@ app.get('/api/admin/leads', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
   try {
-    const [products, cases, posts, storeCards, categories, leads] = await Promise.all([
+    const [products, cases, posts, storeCards, categories, leads, users] = await Promise.all([
       countEntities('products', {}),
       countEntities('cases', {}),
       countEntities('posts', {}),
       countEntities('storeCards', {}),
       countEntities('categories', {}),
-      countLeads({})
+      countLeads({}),
+      countUsers()
     ])
-    res.json({ ok: true, data: { products, cases, posts, storeCards, categories, leads } })
+    res.json({ ok: true, data: { products, cases, posts, storeCards, categories, leads, users } })
   } catch (e) {
     const msg = String(e && e.message ? e.message : '').trim()
     res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })

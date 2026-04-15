@@ -50,6 +50,7 @@ let mode = 'file'
 let pool = null
 const dataDir = path.join(__dirname, '../../data')
 const leadsFile = path.join(dataDir, 'leads.json')
+const usersFile = path.join(dataDir, 'users.json')
 const settingsFile = path.join(dataDir, 'app_settings.json')
 const entityFiles = {
   products: path.join(dataDir, 'products.json'),
@@ -79,6 +80,7 @@ async function initStore() {
   mode = 'file'
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
   if (!fs.existsSync(leadsFile)) fs.writeFileSync(leadsFile, JSON.stringify([]))
+  if (!fs.existsSync(usersFile)) fs.writeFileSync(usersFile, JSON.stringify([]))
   if (!fs.existsSync(settingsFile)) fs.writeFileSync(settingsFile, JSON.stringify(defaultSettings(), null, 2))
   for (const k of Object.keys(entityFiles)) {
     const fp = entityFiles[k]
@@ -103,6 +105,17 @@ async function ensureMySQLSchema() {
         source VARCHAR(128) NULL,
         meta_json TEXT NULL,
         created_at DATETIME NOT NULL
+      )
+    `
+  )
+  await pool.query(
+    `
+      CREATE TABLE IF NOT EXISTS users (
+        openid VARCHAR(128) PRIMARY KEY,
+        nick_name VARCHAR(128) NOT NULL,
+        avatar_url VARCHAR(512) NOT NULL,
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL
       )
     `
   )
@@ -230,6 +243,11 @@ async function ensureMySQLSchema() {
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_design_title VARCHAR(255) NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_design_sub_title VARCHAR(255) NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_products_title VARCHAR(255) NULL')
+
+  await tryAlter('ALTER TABLE users ADD COLUMN nick_name VARCHAR(128) NOT NULL')
+  await tryAlter('ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NOT NULL')
+  await tryAlter('ALTER TABLE users ADD COLUMN created_at DATETIME NOT NULL')
+  await tryAlter('ALTER TABLE users ADD COLUMN updated_at DATETIME NOT NULL')
 }
 
 function defaultSettings() {
@@ -1440,11 +1458,71 @@ function writeLeadsFile(items) {
   fs.writeFileSync(leadsFile, JSON.stringify(items, null, 2))
 }
 
+function readUsersFile() {
+  try {
+    const raw = fs.readFileSync(usersFile, 'utf8')
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v : []
+  } catch (_e) {
+    return []
+  }
+}
+
+function writeUsersFile(items) {
+  fs.writeFileSync(usersFile, JSON.stringify(items, null, 2))
+}
+
+async function upsertUserProfile({ openid, nickName, avatarUrl }) {
+  const id = String(openid || '').trim()
+  const name = String(nickName || '').trim()
+  const ava = String(avatarUrl || '').trim()
+  if (!id) throw new Error('missing openid')
+  if (!name || !ava) throw new Error('nickName/avatarUrl required')
+  const now = nowISO()
+
+  if (mode === 'mysql') {
+    await pool.query(
+      `
+        INSERT INTO users (openid, nick_name, avatar_url, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE nick_name=VALUES(nick_name), avatar_url=VALUES(avatar_url), updated_at=VALUES(updated_at)
+      `,
+      [id, name, ava, new Date(now), new Date(now)]
+    )
+    const [rows] = await pool.query('SELECT openid, nick_name AS nickName, avatar_url AS avatarUrl, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE openid=? LIMIT 1', [id])
+    const r = rows && rows[0] ? rows[0] : null
+    return r
+      ? { openid: r.openid, nickName: r.nickName, avatarUrl: r.avatarUrl, createdAt: new Date(r.createdAt).toISOString(), updatedAt: new Date(r.updatedAt).toISOString() }
+      : { openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now }
+  }
+
+  const items = readUsersFile()
+  const idx = items.findIndex((x) => x && x.openid === id)
+  if (idx >= 0) {
+    const prev = items[idx]
+    items[idx] = { ...prev, openid: id, nickName: name, avatarUrl: ava, updatedAt: now }
+  } else {
+    items.unshift({ openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now })
+  }
+  writeUsersFile(items)
+  return items.find((x) => x && x.openid === id) || { openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now }
+}
+
+async function countUsers() {
+  if (mode === 'mysql') {
+    const [rows] = await pool.query('SELECT COUNT(1) AS c FROM users')
+    return Number(rows && rows[0] ? rows[0].c : 0)
+  }
+  return readUsersFile().length
+}
+
 module.exports = {
   initStore,
   createLead,
   listLeads,
   countLeads,
+  upsertUserProfile,
+  countUsers,
   listEntities,
   countEntities,
   getEntity,
