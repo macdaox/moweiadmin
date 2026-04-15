@@ -105,6 +105,7 @@ async function ensureMySQLSchema() {
         id VARCHAR(64) PRIMARY KEY,
         nick_name VARCHAR(128) NOT NULL,
         avatar_url VARCHAR(512) NOT NULL,
+        phone VARCHAR(32) NULL,
         visitor_id VARCHAR(128) NULL,
         source VARCHAR(128) NULL,
         meta_json TEXT NULL,
@@ -272,6 +273,8 @@ async function ensureMySQLSchema() {
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_design_sub_title VARCHAR(255) NULL')
   await tryAlter('ALTER TABLE app_settings ADD COLUMN home_products_title VARCHAR(255) NULL')
 
+  await tryAlter('ALTER TABLE leads ADD COLUMN phone VARCHAR(32) NULL')
+
   await tryAlter('ALTER TABLE users ADD COLUMN nick_name VARCHAR(128) NOT NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NOT NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN phone VARCHAR(32) NULL')
@@ -314,6 +317,7 @@ async function createLead(input) {
     id: newId(),
     nickName: input.nickName,
     avatarUrl: input.avatarUrl,
+    phone: String(input.phone || '').trim(),
     visitorId: input.visitorId || '',
     source: input.source || '',
     meta: input.meta || null,
@@ -323,8 +327,8 @@ async function createLead(input) {
   if (mode === 'mysql') {
     const metaJson = lead.meta ? JSON.stringify(lead.meta) : null
     await pool.query(
-      'INSERT INTO leads (id, nick_name, avatar_url, visitor_id, source, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [lead.id, lead.nickName, lead.avatarUrl, lead.visitorId || null, lead.source || null, metaJson, new Date(lead.createdAt)]
+      'INSERT INTO leads (id, nick_name, avatar_url, phone, visitor_id, source, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [lead.id, lead.nickName, lead.avatarUrl, lead.phone || null, lead.visitorId || null, lead.source || null, metaJson, new Date(lead.createdAt)]
     )
     return lead
   }
@@ -340,16 +344,17 @@ async function listLeads({ limit, offset, q }) {
   const skip = Math.max(0, Number(offset) || 0)
   const keyword = String(q || '').trim()
   if (mode === 'mysql') {
-    const where = keyword ? 'WHERE nick_name LIKE ? OR visitor_id LIKE ? OR source LIKE ?' : ''
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, take, skip] : [take, skip]
+    const where = keyword ? 'WHERE nick_name LIKE ? OR visitor_id LIKE ? OR source LIKE ? OR phone LIKE ?' : ''
+    const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, take, skip] : [take, skip]
     const [rows] = await pool.query(
-      `SELECT id, nick_name AS nickName, avatar_url AS avatarUrl, visitor_id AS visitorId, source, meta_json AS metaJson, created_at AS createdAt FROM leads ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT id, nick_name AS nickName, avatar_url AS avatarUrl, phone, visitor_id AS visitorId, source, meta_json AS metaJson, created_at AS createdAt FROM leads ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       params
     )
     return rows.map((r) => ({
       id: r.id,
       nickName: r.nickName,
       avatarUrl: r.avatarUrl,
+      phone: r.phone || '',
       visitorId: r.visitorId || '',
       source: r.source || '',
       meta: r.metaJson ? safeJSON(r.metaJson) : null,
@@ -360,7 +365,7 @@ async function listLeads({ limit, offset, q }) {
   const items = readLeadsFile()
   const filtered = keyword
     ? items.filter((x) => {
-        const a = `${x.nickName || ''} ${x.visitorId || ''} ${x.source || ''}`
+        const a = `${x.nickName || ''} ${x.phone || ''} ${x.visitorId || ''} ${x.source || ''}`
         return a.includes(keyword)
       })
     : items
@@ -370,15 +375,15 @@ async function listLeads({ limit, offset, q }) {
 async function countLeads({ q }) {
   const keyword = String(q || '').trim()
   if (mode === 'mysql') {
-    const where = keyword ? 'WHERE nick_name LIKE ? OR visitor_id LIKE ? OR source LIKE ?' : ''
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`] : []
+    const where = keyword ? 'WHERE nick_name LIKE ? OR visitor_id LIKE ? OR source LIKE ? OR phone LIKE ?' : ''
+    const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`] : []
     const [rows] = await pool.query(`SELECT COUNT(1) AS c FROM leads ${where}`, params)
     return Number(rows && rows[0] ? rows[0].c : 0)
   }
   const items = readLeadsFile()
   if (!keyword) return items.length
   return items.filter((x) => {
-    const a = `${x.nickName || ''} ${x.visitorId || ''} ${x.source || ''}`
+    const a = `${x.nickName || ''} ${x.phone || ''} ${x.visitorId || ''} ${x.source || ''}`
     return a.includes(keyword)
   }).length
 }

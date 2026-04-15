@@ -47,7 +47,7 @@ export default function Leads() {
         <Search className="h-4 w-4 text-zinc-400" />
         <input
           className="w-full bg-transparent text-sm outline-none"
-          placeholder="搜索昵称 / visitorId / 来源..."
+          placeholder="搜索昵称 / 电话 / visitorId / 来源..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -67,10 +67,11 @@ export default function Leads() {
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="grid grid-cols-12 gap-2 border-b border-zinc-200 px-4 py-3 text-xs font-medium text-zinc-500">
-          <div className="col-span-4">访客</div>
+          <div className="col-span-3">访客</div>
+          <div className="col-span-2">电话</div>
           <div className="col-span-3">visitorId</div>
           <div className="col-span-2">来源</div>
-          <div className="col-span-3 text-right">提交时间</div>
+          <div className="col-span-2 text-right">提交时间</div>
         </div>
         {loading ? (
           <div className="px-4 py-6 text-sm text-zinc-500">加载中...</div>
@@ -86,16 +87,19 @@ export default function Leads() {
                   setOpen(true)
                 }}
               >
-                <div className="col-span-4 flex items-center gap-3">
-                  <img className="h-8 w-8 rounded-full border border-zinc-200 object-cover" src={it.avatarUrl} alt="" />
+                <div className="col-span-3 flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-700">
+                    {(it.nickName || '访').slice(0, 1)}
+                  </div>
                   <div className="min-w-0">
                     <div className="truncate font-medium text-zinc-900">{it.nickName}</div>
                     <div className="truncate text-xs text-zinc-500">{it.id}</div>
                   </div>
                 </div>
+                <div className="col-span-2 truncate font-medium text-zinc-900">{it.phone || '-'}</div>
                 <div className="col-span-3 truncate text-zinc-700">{it.visitorId || '-'}</div>
                 <div className="col-span-2 truncate text-zinc-700">{it.source || '-'}</div>
-                <div className="col-span-3 text-right text-xs text-zinc-500">{new Date(it.createdAt).toLocaleString()}</div>
+                <div className="col-span-2 text-right text-xs text-zinc-500">{new Date(it.createdAt).toLocaleString()}</div>
               </button>
             ))}
           </div>
@@ -116,13 +120,17 @@ export default function Leads() {
         {selected ? (
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-3">
-              <img className="h-10 w-10 rounded-full border border-zinc-200 object-cover" src={selected.avatarUrl} alt="" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50 text-sm font-semibold text-zinc-700">
+                {(selected.nickName || '访').slice(0, 1)}
+              </div>
               <div>
                 <div className="font-medium text-zinc-900">{selected.nickName}</div>
                 <div className="text-xs text-zinc-500">{selected.id}</div>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
+              <div className="text-xs text-zinc-500">电话</div>
+              <div className="col-span-2 font-medium text-zinc-900">{selected.phone || '-'}</div>
               <div className="text-xs text-zinc-500">visitorId</div>
               <div className="col-span-2 text-zinc-900">{selected.visitorId || '-'}</div>
               <div className="text-xs text-zinc-500">来源</div>

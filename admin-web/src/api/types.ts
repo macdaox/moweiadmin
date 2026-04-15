@@ -124,6 +124,7 @@ export type Lead = {
   id: string
   nickName: string
   avatarUrl: string
+  phone: string
   visitorId: string
   source: string
   meta: unknown

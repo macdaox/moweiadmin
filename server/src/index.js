@@ -496,6 +496,7 @@ app.post('/api/user/phone', async (req, res) => {
       createLead({
         nickName,
         avatarUrl,
+        phone,
         visitorId,
         source: 'bind_phone',
         meta: { phone, ts: Date.now() }
