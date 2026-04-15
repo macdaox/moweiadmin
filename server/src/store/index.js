@@ -51,6 +51,8 @@ let pool = null
 const dataDir = path.join(__dirname, '../../data')
 const leadsFile = path.join(dataDir, 'leads.json')
 const usersFile = path.join(dataDir, 'users.json')
+const postLikesFile = path.join(dataDir, 'post_likes.json')
+const postCommentsFile = path.join(dataDir, 'post_comments.json')
 const settingsFile = path.join(dataDir, 'app_settings.json')
 const entityFiles = {
   products: path.join(dataDir, 'products.json'),
@@ -81,6 +83,8 @@ async function initStore() {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
   if (!fs.existsSync(leadsFile)) fs.writeFileSync(leadsFile, JSON.stringify([]))
   if (!fs.existsSync(usersFile)) fs.writeFileSync(usersFile, JSON.stringify([]))
+  if (!fs.existsSync(postLikesFile)) fs.writeFileSync(postLikesFile, JSON.stringify([]))
+  if (!fs.existsSync(postCommentsFile)) fs.writeFileSync(postCommentsFile, JSON.stringify([]))
   if (!fs.existsSync(settingsFile)) fs.writeFileSync(settingsFile, JSON.stringify(defaultSettings(), null, 2))
   for (const k of Object.keys(entityFiles)) {
     const fp = entityFiles[k]
@@ -182,6 +186,29 @@ async function ensureMySQLSchema() {
   )
   await pool.query(
     `
+      CREATE TABLE IF NOT EXISTS post_likes (
+        post_id VARCHAR(64) NOT NULL,
+        actor_id VARCHAR(128) NOT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY (post_id, actor_id)
+      )
+    `
+  )
+  await pool.query(
+    `
+      CREATE TABLE IF NOT EXISTS post_comments (
+        id VARCHAR(64) PRIMARY KEY,
+        post_id VARCHAR(64) NOT NULL,
+        actor_id VARCHAR(128) NOT NULL,
+        nick_name VARCHAR(128) NOT NULL,
+        avatar_url VARCHAR(512) NOT NULL,
+        content TEXT NOT NULL,
+        created_at DATETIME NOT NULL
+      )
+    `
+  )
+  await pool.query(
+    `
       CREATE TABLE IF NOT EXISTS store_cards (
         id VARCHAR(64) PRIMARY KEY,
         store_name VARCHAR(255) NOT NULL,
@@ -250,6 +277,15 @@ async function ensureMySQLSchema() {
   await tryAlter('ALTER TABLE users ADD COLUMN phone VARCHAR(32) NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN created_at DATETIME NOT NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN updated_at DATETIME NOT NULL')
+
+  await tryAlter('ALTER TABLE post_likes ADD COLUMN created_at DATETIME NOT NULL')
+
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN post_id VARCHAR(64) NOT NULL')
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN actor_id VARCHAR(128) NOT NULL')
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN nick_name VARCHAR(128) NOT NULL')
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN avatar_url VARCHAR(512) NOT NULL')
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN content TEXT NOT NULL')
+  await tryAlter('ALTER TABLE post_comments ADD COLUMN created_at DATETIME NOT NULL')
 }
 
 function defaultSettings() {
@@ -1474,6 +1510,34 @@ function writeUsersFile(items) {
   fs.writeFileSync(usersFile, JSON.stringify(items, null, 2))
 }
 
+function readPostLikesFile() {
+  try {
+    const raw = fs.readFileSync(postLikesFile, 'utf8')
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v : []
+  } catch (_e) {
+    return []
+  }
+}
+
+function writePostLikesFile(items) {
+  fs.writeFileSync(postLikesFile, JSON.stringify(items, null, 2))
+}
+
+function readPostCommentsFile() {
+  try {
+    const raw = fs.readFileSync(postCommentsFile, 'utf8')
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v : []
+  } catch (_e) {
+    return []
+  }
+}
+
+function writePostCommentsFile(items) {
+  fs.writeFileSync(postCommentsFile, JSON.stringify(items, null, 2))
+}
+
 async function upsertUserProfile({ openid, nickName, avatarUrl, phone }) {
   const id = String(openid || '').trim()
   const name = String(nickName || '').trim()
@@ -1529,6 +1593,132 @@ async function countUsers() {
   return readUsersFile().length
 }
 
+async function togglePostLike({ postId, actorId }) {
+  const pid = String(postId || '').trim()
+  const aid = String(actorId || '').trim()
+  if (!pid) throw new Error('missing postId')
+  if (!aid) throw new Error('missing actorId')
+  const now = nowISO()
+
+  if (mode === 'mysql') {
+    const [rows] = await pool.query('SELECT 1 AS ok FROM post_likes WHERE post_id=? AND actor_id=? LIMIT 1', [pid, aid])
+    const exists = !!(rows && rows[0])
+    if (exists) await pool.query('DELETE FROM post_likes WHERE post_id=? AND actor_id=?', [pid, aid])
+    else await pool.query('INSERT INTO post_likes (post_id, actor_id, created_at) VALUES (?, ?, ?)', [pid, aid, new Date(now)])
+    const [crows] = await pool.query('SELECT COUNT(1) AS c FROM post_likes WHERE post_id=?', [pid])
+    const c = Number(crows && crows[0] ? crows[0].c : 0)
+    return { liked: !exists, likes: c }
+  }
+
+  const items = readPostLikesFile()
+  const idx = items.findIndex((x) => x && x.postId === pid && x.actorId === aid)
+  const exists = idx >= 0
+  const next = exists ? items.filter((_, i) => i !== idx) : [{ postId: pid, actorId: aid, createdAt: now }, ...items]
+  writePostLikesFile(next)
+  const likes = next.filter((x) => x && x.postId === pid).length
+  return { liked: !exists, likes }
+}
+
+async function addPostComment({ postId, actorId, nickName, avatarUrl, content }) {
+  const pid = String(postId || '').trim()
+  const aid = String(actorId || '').trim()
+  const name = String(nickName || '').trim()
+  const ava = String(avatarUrl || '').trim()
+  const text = String(content || '').trim()
+  if (!pid) throw new Error('missing postId')
+  if (!aid) throw new Error('missing actorId')
+  if (!name || !ava) throw new Error('nickName/avatarUrl required')
+  if (!text) throw new Error('content required')
+  const now = nowISO()
+  const id = newId()
+
+  if (mode === 'mysql') {
+    await pool.query(
+      'INSERT INTO post_comments (id, post_id, actor_id, nick_name, avatar_url, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, pid, aid, name, ava, text, new Date(now)]
+    )
+    return { id, postId: pid, nickName: name, avatarUrl: ava, content: text, createdAt: now }
+  }
+
+  const items = readPostCommentsFile()
+  items.unshift({ id, postId: pid, actorId: aid, nickName: name, avatarUrl: ava, content: text, createdAt: now })
+  writePostCommentsFile(items)
+  return { id, postId: pid, nickName: name, avatarUrl: ava, content: text, createdAt: now }
+}
+
+async function listPostComments(postId, limit = 20) {
+  const pid = String(postId || '').trim()
+  const take = Math.max(1, Math.min(50, Number(limit) || 20))
+  if (!pid) return []
+  if (mode === 'mysql') {
+    const [rows] = await pool.query(
+      'SELECT id, post_id AS postId, nick_name AS nickName, avatar_url AS avatarUrl, content, created_at AS createdAt FROM post_comments WHERE post_id=? ORDER BY created_at DESC LIMIT ?',
+      [pid, take]
+    )
+    return (rows || []).map((r) => ({
+      id: r.id,
+      postId: r.postId,
+      nickName: r.nickName,
+      avatarUrl: r.avatarUrl,
+      content: r.content || '',
+      createdAt: new Date(r.createdAt).toISOString()
+    }))
+  }
+  const all = readPostCommentsFile().filter((x) => x && x.postId === pid)
+  all.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+  return all.slice(0, take).map((x) => ({ id: x.id, postId: x.postId, nickName: x.nickName, avatarUrl: x.avatarUrl, content: x.content, createdAt: x.createdAt }))
+}
+
+async function getPostsEngagement(postIds) {
+  const ids = Array.isArray(postIds) ? postIds.map((x) => String(x || '').trim()).filter(Boolean) : []
+  const uniq = Array.from(new Set(ids)).slice(0, 200)
+  const likesCount = {}
+  const commentsCount = {}
+  const latestComments = {}
+  if (!uniq.length) return { likesCount, commentsCount, latestComments }
+
+  if (mode === 'mysql') {
+    const inPlaceholders = uniq.map(() => '?').join(',')
+    const [lrows] = await pool.query(`SELECT post_id AS postId, COUNT(1) AS c FROM post_likes WHERE post_id IN (${inPlaceholders}) GROUP BY post_id`, uniq)
+    ;(lrows || []).forEach((r) => {
+      likesCount[String(r.postId)] = Number(r.c) || 0
+    })
+    const [crows] = await pool.query(`SELECT post_id AS postId, COUNT(1) AS c FROM post_comments WHERE post_id IN (${inPlaceholders}) GROUP BY post_id`, uniq)
+    ;(crows || []).forEach((r) => {
+      commentsCount[String(r.postId)] = Number(r.c) || 0
+    })
+    const [rows] = await pool.query(
+      `SELECT id, post_id AS postId, nick_name AS nickName, avatar_url AS avatarUrl, content, created_at AS createdAt FROM post_comments WHERE post_id IN (${inPlaceholders}) ORDER BY created_at DESC LIMIT 200`,
+      uniq
+    )
+    ;(rows || []).forEach((r) => {
+      const pid = String(r.postId)
+      if (!latestComments[pid]) latestComments[pid] = []
+      if (latestComments[pid].length >= 3) return
+      latestComments[pid].push({
+        id: r.id,
+        postId: pid,
+        nickName: r.nickName,
+        avatarUrl: r.avatarUrl,
+        content: r.content || '',
+        createdAt: new Date(r.createdAt).toISOString()
+      })
+    })
+    return { likesCount, commentsCount, latestComments }
+  }
+
+  const likes = readPostLikesFile()
+  const comments = readPostCommentsFile()
+  for (const pid of uniq) {
+    likesCount[pid] = likes.filter((x) => x && x.postId === pid).length
+    const cs = comments.filter((x) => x && x.postId === pid)
+    commentsCount[pid] = cs.length
+    cs.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    latestComments[pid] = cs.slice(0, 3).map((x) => ({ id: x.id, postId: x.postId, nickName: x.nickName, avatarUrl: x.avatarUrl, content: x.content, createdAt: x.createdAt }))
+  }
+  return { likesCount, commentsCount, latestComments }
+}
+
 module.exports = {
   initStore,
   createLead,
@@ -1536,6 +1726,10 @@ module.exports = {
   countLeads,
   upsertUserProfile,
   countUsers,
+  togglePostLike,
+  addPostComment,
+  listPostComments,
+  getPostsEngagement,
   listEntities,
   countEntities,
   getEntity,

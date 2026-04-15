@@ -12,6 +12,10 @@ const {
   countLeads,
   countUsers,
   upsertUserProfile,
+  togglePostLike,
+  addPostComment,
+  listPostComments,
+  getPostsEngagement,
   listEntities,
   countEntities,
   getEntity,
@@ -180,6 +184,18 @@ app.get('/api/public/:entity', async (req, res) => {
     const { limit, offset, q, categoryId, tag } = req.query
     const items = await listPublicEntities(entity, { limit, offset, q, categoryId, tag })
     const total = await countPublicEntities(entity, { q, categoryId, tag })
+    if (entity === 'posts' && Array.isArray(items) && items.length) {
+      const ids = items.map((x) => x.id)
+      const eng = await getPostsEngagement(ids)
+      const next = items.map((p) => ({
+        ...p,
+        likes: eng.likesCount[p.id] || 0,
+        commentsCount: eng.commentsCount[p.id] || 0,
+        comments: eng.latestComments[p.id] || []
+      }))
+      res.json({ ok: true, data: { items: next, total } })
+      return
+    }
     res.json({ ok: true, data: { items, total } })
   } catch (_e) {
     res.status(500).json({ ok: false, message: 'internal error' })
@@ -198,9 +214,84 @@ app.get('/api/public/:entity/:id', async (req, res) => {
       res.status(404).json({ ok: false, message: 'not found' })
       return
     }
+    if (entity === 'posts') {
+      const eng = await getPostsEngagement([item.id])
+      const comments = await listPostComments(item.id, 20)
+      res.json({
+        ok: true,
+        data: {
+          ...item,
+          likes: eng.likesCount[item.id] || 0,
+          commentsCount: eng.commentsCount[item.id] || 0,
+          comments
+        }
+      })
+      return
+    }
     res.json({ ok: true, data: item })
   } catch (_e) {
     res.status(500).json({ ok: false, message: 'internal error' })
+  }
+})
+
+app.post('/api/public/posts/:id/like', async (req, res) => {
+  try {
+    const postId = String(req.params.id || '').trim()
+    if (!postId) {
+      res.status(400).json({ ok: false, message: 'postId required' })
+      return
+    }
+    const payload = req.body || {}
+    const openid = getWXOpenId(req)
+    const actorId = String(openid || payload.visitorId || '').trim()
+    if (!actorId) {
+      res.status(401).json({ ok: false, message: 'missing actorId' })
+      return
+    }
+    const out = await togglePostLike({ postId, actorId })
+    res.json({ ok: true, data: out })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'internal error')
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })
+  }
+})
+
+app.post('/api/public/posts/:id/comment', async (req, res) => {
+  try {
+    const postId = String(req.params.id || '').trim()
+    if (!postId) {
+      res.status(400).json({ ok: false, message: 'postId required' })
+      return
+    }
+    const payload = req.body || {}
+    const openid = getWXOpenId(req)
+    const actorId = String(openid || payload.visitorId || '').trim()
+    const nickName = String(payload.nickName || '').trim()
+    const avatarUrl = String(payload.avatarUrl || '').trim()
+    const content = String(payload.content || '').trim()
+    if (!actorId) {
+      res.status(401).json({ ok: false, message: 'missing actorId' })
+      return
+    }
+    const post = await getPublicEntity('posts', postId)
+    if (!post) {
+      res.status(404).json({ ok: false, message: 'not found' })
+      return
+    }
+    const c = await addPostComment({ postId, actorId, nickName, avatarUrl, content })
+    if (payload.visitorId) {
+      createLead({
+        nickName,
+        avatarUrl,
+        visitorId: String(payload.visitorId || ''),
+        source: 'post_comment',
+        meta: { postId, content: content.slice(0, 120), ts: Date.now() }
+      }).catch(() => {})
+    }
+    res.json({ ok: true, data: c })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'internal error')
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })
   }
 })
 
