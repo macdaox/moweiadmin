@@ -175,6 +175,42 @@ app.get('/api/admin/debug/store', requireAdmin, async (_req, res) => {
   res.json({ ok: true, data: { mode: getStoreMode() } })
 })
 
+app.get('/api/admin/debug/cos', requireAdmin, async (_req, res) => {
+  try {
+    const Bucket = String(process.env.COS_BUCKET || '').trim()
+    const Region = String(process.env.COS_REGION || '').trim()
+    const hasBucket = !!Bucket
+    const hasRegion = !!Region
+    if (!hasBucket || !hasRegion) {
+      res.json({ ok: true, data: { hasBucket, hasRegion, canCredential: false, error: 'missing env' } })
+      return
+    }
+    let canCredential = false
+    let error = ''
+    try {
+      const { getTencentCloudTempCredential } = require('./tencentCred')
+      await getTencentCloudTempCredential()
+      canCredential = true
+    } catch (e) {
+      error = String(e && e.message ? e.message : '')
+    }
+    res.json({
+      ok: true,
+      data: {
+        hasBucket,
+        hasRegion,
+        hasWX_CONTEXT: !!String(process.env.WX_CONTEXT || '').trim(),
+        hasTENCENTCLOUD_SECRETID: !!String(process.env.TENCENTCLOUD_SECRETID || '').trim(),
+        hasTENCENTCLOUD_SECRETKEY: !!String(process.env.TENCENTCLOUD_SECRETKEY || '').trim(),
+        canCredential,
+        error: error || null
+      }
+    })
+  } catch (_e) {
+    res.status(500).json({ ok: false, message: 'internal error' })
+  }
+})
+
 app.post('/api/admin/upload', requireAdmin, upload.single('file'), async (req, res) => {
   try {
     const f = req.file
@@ -238,15 +274,20 @@ app.get('/api/admin/leads', requireAdmin, async (req, res) => {
 })
 
 app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
-  const [products, cases, posts, storeCards, categories, leads] = await Promise.all([
-    countEntities('products', {}),
-    countEntities('cases', {}),
-    countEntities('posts', {}),
-    countEntities('storeCards', {}),
-    countEntities('categories', {}),
-    countLeads({})
-  ])
-  res.json({ ok: true, data: { products, cases, posts, storeCards, categories, leads } })
+  try {
+    const [products, cases, posts, storeCards, categories, leads] = await Promise.all([
+      countEntities('products', {}),
+      countEntities('cases', {}),
+      countEntities('posts', {}),
+      countEntities('storeCards', {}),
+      countEntities('categories', {}),
+      countLeads({})
+    ])
+    res.json({ ok: true, data: { products, cases, posts, storeCards, categories, leads } })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : '').trim()
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })
+  }
 })
 
 function parseEntityName(v) {
