@@ -2,6 +2,7 @@ require('dotenv').config()
 
 const path = require('path')
 const fs = require('fs')
+const https = require('https')
 const express = require('express')
 const cors = require('cors')
 const multer = require('multer')
@@ -38,6 +39,76 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
 })
+
+function httpsJSON({ method, url, data, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    try {
+      const u = new URL(url)
+      const body = data ? Buffer.from(JSON.stringify(data)) : null
+      const req = https.request(
+        {
+          protocol: u.protocol,
+          hostname: u.hostname,
+          port: u.port || 443,
+          path: `${u.pathname}${u.search || ''}`,
+          method: method || 'GET',
+          headers: {
+            'content-type': 'application/json',
+            ...(body ? { 'content-length': String(body.length) } : {})
+          },
+          timeout: timeoutMs || 8000
+        },
+        (res) => {
+          const chunks = []
+          res.on('data', (c) => chunks.push(c))
+          res.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8')
+            let parsed = null
+            try {
+              parsed = raw ? JSON.parse(raw) : null
+            } catch (_e) {}
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(parsed)
+              return
+            }
+            reject(new Error((parsed && parsed.errmsg) || (parsed && parsed.message) || `HTTP ${res.statusCode || 0}`))
+          })
+        }
+      )
+      req.on('error', (e) => reject(e))
+      if (body) req.write(body)
+      req.end()
+    } catch (e) {
+      reject(e)
+    }
+  })
+}
+
+let wxAccessToken = ''
+let wxAccessTokenExpireAt = 0
+
+function getWxAppConfig() {
+  const appid = String(process.env.WX_APPID || process.env.MINIPROGRAM_APPID || process.env.APPID || '').trim()
+  const secret = String(process.env.WX_APPSECRET || process.env.MINIPROGRAM_SECRET || process.env.APPSECRET || '').trim()
+  return appid && secret ? { appid, secret } : null
+}
+
+async function getWxAccessToken() {
+  const cfg = getWxAppConfig()
+  if (!cfg) throw new Error('missing wx appid/secret')
+  const now = Date.now()
+  if (wxAccessToken && wxAccessTokenExpireAt && now < wxAccessTokenExpireAt) return wxAccessToken
+  const r = await httpsJSON({
+    method: 'GET',
+    url: `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(cfg.appid)}&secret=${encodeURIComponent(cfg.secret)}`
+  })
+  const token = r && r.access_token ? String(r.access_token) : ''
+  const exp = Number(r && r.expires_in ? r.expires_in : 0) || 0
+  if (!token) throw new Error((r && r.errmsg) || 'access_token failed')
+  wxAccessToken = token
+  wxAccessTokenExpireAt = now + Math.max(0, exp - 120) * 1000
+  return wxAccessToken
+}
 
 const adminPublicDir = path.join(__dirname, '../public')
 const adminIndexFile = path.join(adminPublicDir, 'index.html')
@@ -291,6 +362,55 @@ app.post('/api/user/profile', async (req, res) => {
     }
     const data = await upsertUserProfile({ openid, nickName, avatarUrl })
     res.json({ ok: true, data })
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : 'internal error')
+    res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })
+  }
+})
+
+app.post('/api/user/phone', async (req, res) => {
+  try {
+    const openid = getWXOpenId(req)
+    if (!openid) {
+      res.status(401).json({ ok: false, message: 'missing openid' })
+      return
+    }
+    const payload = req.body || {}
+    const code = String(payload.code || '').trim()
+    const nickName = String(payload.nickName || '').trim()
+    const avatarUrl = String(payload.avatarUrl || '').trim()
+    const visitorId = String(payload.visitorId || '').trim()
+    if (!code) {
+      res.status(400).json({ ok: false, message: 'code required' })
+      return
+    }
+    if (!nickName || !avatarUrl) {
+      res.status(400).json({ ok: false, message: 'nickName/avatarUrl required' })
+      return
+    }
+    const token = await getWxAccessToken()
+    const r = await httpsJSON({
+      method: 'POST',
+      url: `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token)}`,
+      data: { code }
+    })
+    const info = r && r.phone_info ? r.phone_info : null
+    const phone = info && (info.purePhoneNumber || info.phoneNumber) ? String(info.purePhoneNumber || info.phoneNumber) : ''
+    if (!phone) {
+      res.status(500).json({ ok: false, message: (r && r.errmsg) || 'phone parse failed' })
+      return
+    }
+    const data = await upsertUserProfile({ openid, nickName, avatarUrl, phone })
+    if (visitorId) {
+      createLead({
+        nickName,
+        avatarUrl,
+        visitorId,
+        source: 'bind_phone',
+        meta: { phone, ts: Date.now() }
+      }).catch(() => {})
+    }
+    res.json({ ok: true, data: { ...data, phone } })
   } catch (e) {
     const msg = String(e && e.message ? e.message : 'internal error')
     res.status(500).json({ ok: false, message: msg ? msg.slice(0, 200) : 'internal error' })

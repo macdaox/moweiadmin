@@ -114,6 +114,7 @@ async function ensureMySQLSchema() {
         openid VARCHAR(128) PRIMARY KEY,
         nick_name VARCHAR(128) NOT NULL,
         avatar_url VARCHAR(512) NOT NULL,
+        phone VARCHAR(32) NULL,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL
       )
@@ -246,6 +247,7 @@ async function ensureMySQLSchema() {
 
   await tryAlter('ALTER TABLE users ADD COLUMN nick_name VARCHAR(128) NOT NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NOT NULL')
+  await tryAlter('ALTER TABLE users ADD COLUMN phone VARCHAR(32) NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN created_at DATETIME NOT NULL')
   await tryAlter('ALTER TABLE users ADD COLUMN updated_at DATETIME NOT NULL')
 }
@@ -1472,10 +1474,11 @@ function writeUsersFile(items) {
   fs.writeFileSync(usersFile, JSON.stringify(items, null, 2))
 }
 
-async function upsertUserProfile({ openid, nickName, avatarUrl }) {
+async function upsertUserProfile({ openid, nickName, avatarUrl, phone }) {
   const id = String(openid || '').trim()
   const name = String(nickName || '').trim()
   const ava = String(avatarUrl || '').trim()
+  const p = String(phone || '').trim()
   if (!id) throw new Error('missing openid')
   if (!name || !ava) throw new Error('nickName/avatarUrl required')
   const now = nowISO()
@@ -1483,29 +1486,39 @@ async function upsertUserProfile({ openid, nickName, avatarUrl }) {
   if (mode === 'mysql') {
     await pool.query(
       `
-        INSERT INTO users (openid, nick_name, avatar_url, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE nick_name=VALUES(nick_name), avatar_url=VALUES(avatar_url), updated_at=VALUES(updated_at)
+        INSERT INTO users (openid, nick_name, avatar_url, phone, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE nick_name=VALUES(nick_name), avatar_url=VALUES(avatar_url), phone=VALUES(phone), updated_at=VALUES(updated_at)
       `,
-      [id, name, ava, new Date(now), new Date(now)]
+      [id, name, ava, p || null, new Date(now), new Date(now)]
     )
-    const [rows] = await pool.query('SELECT openid, nick_name AS nickName, avatar_url AS avatarUrl, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE openid=? LIMIT 1', [id])
+    const [rows] = await pool.query(
+      'SELECT openid, nick_name AS nickName, avatar_url AS avatarUrl, phone, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE openid=? LIMIT 1',
+      [id]
+    )
     const r = rows && rows[0] ? rows[0] : null
     return r
-      ? { openid: r.openid, nickName: r.nickName, avatarUrl: r.avatarUrl, createdAt: new Date(r.createdAt).toISOString(), updatedAt: new Date(r.updatedAt).toISOString() }
-      : { openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now }
+      ? {
+          openid: r.openid,
+          nickName: r.nickName,
+          avatarUrl: r.avatarUrl,
+          phone: r.phone || '',
+          createdAt: new Date(r.createdAt).toISOString(),
+          updatedAt: new Date(r.updatedAt).toISOString()
+        }
+      : { openid: id, nickName: name, avatarUrl: ava, phone: p, createdAt: now, updatedAt: now }
   }
 
   const items = readUsersFile()
   const idx = items.findIndex((x) => x && x.openid === id)
   if (idx >= 0) {
     const prev = items[idx]
-    items[idx] = { ...prev, openid: id, nickName: name, avatarUrl: ava, updatedAt: now }
+    items[idx] = { ...prev, openid: id, nickName: name, avatarUrl: ava, phone: p || prev.phone || '', updatedAt: now }
   } else {
-    items.unshift({ openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now })
+    items.unshift({ openid: id, nickName: name, avatarUrl: ava, phone: p, createdAt: now, updatedAt: now })
   }
   writeUsersFile(items)
-  return items.find((x) => x && x.openid === id) || { openid: id, nickName: name, avatarUrl: ava, createdAt: now, updatedAt: now }
+  return items.find((x) => x && x.openid === id) || { openid: id, nickName: name, avatarUrl: ava, phone: p, createdAt: now, updatedAt: now }
 }
 
 async function countUsers() {
